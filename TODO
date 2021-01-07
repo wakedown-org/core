@@ -1,0 +1,13 @@
+criar storage offline de objetos
+criar mecanismo de sincronia online para os objetos
+componente de header
+componente de menu
+componente de listas
+componente para formularios
+interface geral
+interface para carteiras
+interface para historico/entradas
+interface para configuracoes
+incrementar a interface geral com graficos
+adaptar para pwa
+criar forma de compartilhamento
