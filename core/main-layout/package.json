@@ -2,7 +2,7 @@
   "name": "main-layout",
   "description": "Webcomponent main-layout following open-wc recommendations",
   "license": "MIT",
-  "author": "main-layout",
+  "author": "rafael@fumasa.org",
   "version": "0.0.0",
   "main": "dist/src/index.js",
   "module": "dist/src/index.js",
