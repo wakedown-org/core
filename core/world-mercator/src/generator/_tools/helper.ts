@@ -3,7 +3,7 @@ import { WorldInfo } from "../_models/world-info";
 import { Converter } from "./converter";
 
 export class Helper {
-  public static TruncDecimals(num: number, precision = 4): number {
+  public static TruncDecimals(num: number, precision = 5): number {
     return Math.trunc(Math.pow(10, precision) * num) / Math.pow(10, precision);
   }
 

@@ -1,10 +1,8 @@
 import { svg, css, LitElement } from 'lit';
-import { property, state } from 'lit/decorators.js';
-import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
+import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
 import { WorldBuilder } from './generator/world-builder';
-import { Layer } from './generator/_models/layer';
-import { Helper } from './generator/_tools/helper';
+import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 
 export class WorldMercator extends LitElement {
   static styles = css`
@@ -27,14 +25,26 @@ export class WorldMercator extends LitElement {
 
   @property({ type: Number }) seed = 8;
   private _world: WorldBuilder = new WorldBuilder(this.seed);
+  // private _worker: Worker = new Worker('./dist/src/workers/worker.js');
+
+  @property({ type: Number }) prime = 1;
+  @property({ type: Number }) width = 1000;
+  @property({ type: Number }) height = 500;
+  @property({ type: String }) layer = new Promise((resolve) => this._world.getLayer(this.width, this.height).then((layer) => resolve(svg`<path d="${layer.AsSvgPath()}"/>`)));
+
+  constructor () {
+    super();
+    // this._worker.onmessage = (event) => this.prime = event.data;
+  }
 
   render() {
     return svg`
       <div class="world">
-        <svg height="500" width="1000" viewBox="0 0 1000 500">
-          ${until(this._world.getLayer(1000, 500).then((layer) => svg`<path d="${layer.AsSvgPath()}"/>`), '')}
+        <svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}">
+          ${ until(this.layer, '') }
         </svg>
       </div>
+      <p>The highest prime number discovered so far is: <output id="result">${this.prime}</output></p>
     `;
   }
 
@@ -55,3 +65,4 @@ export class WorldMercator extends LitElement {
   //   // this._world.getSunShadow(width, height).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath(), { fillOpacity: '.8', stroke: '#000', strokeWidth: '0px' }));
   // }
 }
+
