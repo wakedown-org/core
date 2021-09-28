@@ -1,8 +1,6 @@
 import { svg, css, LitElement } from 'lit';
 import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
-import { WorldBuilder } from './generator/world-builder';
-import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 
 export class WorldMercator extends LitElement {
   static styles = css`
@@ -24,45 +22,56 @@ export class WorldMercator extends LitElement {
   `;
 
   @property({ type: Number }) seed = 8;
-  private _world: WorldBuilder = new WorldBuilder(this.seed);
-  // private _worker: Worker = new Worker('./dist/src/workers/worker.js');
+  private _worker: Worker | null = null;
 
-  @property({ type: Number }) prime = 1;
   @property({ type: Number }) width = 1000;
   @property({ type: Number }) height = 500;
-  @property({ type: String }) layer = new Promise((resolve) => this._world.getLayer(this.width, this.height).then((layer) => resolve(svg`<path d="${layer.AsSvgPath()}"/>`)));
+  @property({ type: Number }) scale = 1;
+  @property({ type: String }) loading = svg`
+  <rect fill="none" stroke="#000" stroke-width="4" x="25" y="25" width="50" height="50">
+    <animateTransform
+      attributeName="transform"
+      dur="0.5s"
+      from="0 50 50"
+      to="180 50 50"
+      type="rotate"
+      id="strokeBox"
+      attributeType="XML"
+      begin="rectBox.end"/>
+    </rect>
+    <rect x="27" y="27" fill="#000" width="46" height="50">
+    <animate
+      attributeName="height"
+      dur="1.3s"
+      attributeType="XML"
+      from="50" 
+      to="0"
+      id="rectBox" 
+      fill="freeze"
+      begin="0s;strokeBox.end"/>
+  </rect>`;
+  @property({ type: String }) layerPath = new Promise(resolve => {
+    if (this._worker === null) {
+      this._worker = new Worker('./dist/src/workers/worker.js', { type: 'module' });
+      this._worker.onmessage = (event: any) => {
+        resolve(svg`<path d="${event.data.path}"/>`);
+      }
+      this._worker.postMessage({ seed: this.seed, width: this.width, height: this.height });
+    }
+  });
 
   constructor () {
     super();
-    // this._worker.onmessage = (event) => this.prime = event.data;
   }
 
   render() {
     return svg`
       <div class="world">
-        <svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}">
-          ${ until(this.layer, '') }
+        <svg width="${this.width*this.scale}" height="${this.height*this.scale}" viewBox="0 0 ${this.width} ${this.height}">
+          ${ until(this.layerPath, this.loading) }
         </svg>
       </div>
-      <p>The highest prime number discovered so far is: <output id="result">${this.prime}</output></p>
     `;
   }
-
-  // private drawMercator(context: CanvasRenderingContext2D, svg: SVGElement) {
-
-  //   const width = 1000;//document.body.clientWidth - 40;
-  //   const height = 500;//(document.body.clientHeight - 40);
-
-  //   // this._world.GetAllMercatorPoints(width, height).then((points) => Helper.BuildImage(context, points, width, height));
-
-  //   this._world.getLayer(width, height).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath()));
-
-  //   // this._world.getLongitudeLines(width, height).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath(false), { fillOpacity: '.1', stroke: '#000', strokeWidth: '.5px' }));
-  //   // this._world.getLatitudeLines(width, height, false).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath(false), { fillOpacity: '.1', stroke: '#000', strokeWidth: '.5px' }));
-  //   // this._world.getEquatorLines(width, height).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath(false), { fillOpacity: '.1', stroke: '#F00', strokeWidth: '1px' }));
-  //   // this._world.getTropicsAndCirclesLines(width, height).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath(false), { fillOpacity: '.1', stroke: '#00F', strokeWidth: '1px' }));
-
-  //   // this._world.getSunShadow(width, height).then((layer) => Helper.CreatePathElement(svg, layer.AsSvgPath(), { fillOpacity: '.8', stroke: '#000', strokeWidth: '0px' }));
-  // }
 }
 

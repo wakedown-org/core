@@ -1,7 +1,7 @@
 import { Coordinate } from "./_models/coordinate";
 import { Layer } from "./_models/layer";
 import { Point } from "./_models/point";
-import SkyPoint from "./_models/sky-point";
+import { SkyPoint } from "./_models/sky-point";
 import { Vector } from "./_models/vector";
 import { WorldInfo } from "./_models/world-info";
 import { Converter } from "./_tools/converter";
@@ -57,7 +57,7 @@ export class WorldBuilder {
   }
 
   public GetInformation(coordinate: Coordinate, zoom = 1, onlyTopology: boolean = false) {
-    if (!(coordinate.radius != null)) {
+    if (coordinate.radius === null) {
       coordinate.radius = zoom;
     }
     var point = Converter.ToCardian(coordinate);
