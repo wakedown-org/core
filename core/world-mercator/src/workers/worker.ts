@@ -1,21 +1,25 @@
-import { WorldBuilder } from '../generator/world-builder';
-import { Layer } from '../generator/_models/layer';
+import { WorldBuilder } from './generator/world-builder';
+import { Layer } from './generator/_models/layer';
 
 let seed: number;
 let world: WorldBuilder;
 let layer: Layer;
+let layers: { [id: string]: string; };
 
 self.onmessage = async (eventData: any) => {
   if (seed === undefined)
-    seed = eventData.seed ?? 8;
+    seed = eventData.data.seed ?? 8;
 
   if (world === undefined)
     world = new WorldBuilder(seed)
 
-  if (layer === undefined)
-    layer = await world.getLayer(eventData.width ?? 1000, eventData.height ?? 500);
+  // if (layer === undefined)
+  //   layer = await world.getLayer(eventData.data.width ?? 1000, eventData.data.height ?? 500);
+  // self.postMessage({ 'shoreline': layer.AsSvgPath() })
 
-  self.postMessage({ path: layer.AsSvgPath() })
+  if (layers === undefined)
+    layers = await world.getLayers(eventData.data.width ?? 1000, eventData.data.height ?? 500);
+  self.postMessage(layers)
 }
 
 // private drawMercator(context: CanvasRenderingContext2D, svg: SVGElement) {

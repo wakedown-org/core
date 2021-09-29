@@ -1,8 +1,10 @@
+import { BiomeColor } from "./_models/biome-color";
 import { Coordinate } from "./_models/coordinate";
 import { Layer } from "./_models/layer";
 import { Point } from "./_models/point";
 import { SkyPoint } from "./_models/sky-point";
 import { Vector } from "./_models/vector";
+import { WorldBiome } from "./_models/world-biome";
 import { WorldInfo } from "./_models/world-info";
 import { Converter } from "./_tools/converter";
 import { Perlin } from "./_tools/perlin.noise";
@@ -160,6 +162,72 @@ export class WorldBuilder {
       progress.stop();
       resolve(layer);
     });
+  }
+
+  public getLayers(width: number, height: number): Promise<{ [id: string]: string; }> {
+    const progress = new Progress('getLayers', width * height);
+    return new Promise<{ [id: string]: string; }>(resolve => {
+      progress.start();
+      const allLayers: { [id: string]: Vector[]; } = {};
+      for (let x = 0; x < width - 1; x++) {
+        for (let y = 0; y < height - 1; y++) {
+          progress.check();
+          const no = new Point(x, y, 0);
+          const noInfo = this.GetInformation(Converter.FromMercator(no, width, height));
+          const ne = new Point((1 + x), y, 0);
+          const neInfo = this.GetInformation(Converter.FromMercator(ne, width, height));
+          const so = new Point(x, (1 + y), 0);
+          const soInfo = this.GetInformation(Converter.FromMercator(so, width, height));
+          const se = new Point((1 + x), (1 + y), 0);
+          const seInfo = this.GetInformation(Converter.FromMercator(se, width, height));
+
+          if (allLayers[WorldBiome[noInfo.Biome]] === undefined || allLayers[WorldBiome[noInfo.Biome]] === null)
+            allLayers[WorldBiome[noInfo.Biome]] = [];
+          if (allLayers[WorldBiome[neInfo.Biome]] === undefined || allLayers[WorldBiome[neInfo.Biome]] === null)
+            allLayers[WorldBiome[neInfo.Biome]] = [];
+          if (allLayers[WorldBiome[soInfo.Biome]] === undefined || allLayers[WorldBiome[soInfo.Biome]] === null)
+            allLayers[WorldBiome[soInfo.Biome]] = [];
+          if (allLayers[WorldBiome[seInfo.Biome]] === undefined || allLayers[WorldBiome[seInfo.Biome]] === null)
+            allLayers[WorldBiome[seInfo.Biome]] = [];
+
+          if (noInfo.Biome === neInfo.Biome && soInfo.Biome === seInfo.Biome && noInfo.Biome === seInfo.Biome) {
+            [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[WorldBiome[noInfo.Biome]], vector));
+          } else {
+            // [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => {
+            //   console.log('temço', allLayers, this.maxCountBiome(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome), vector);
+            //   Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[this.maxCountBiome(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome)], vector)
+            // });
+          }
+        }
+      }
+      const layers: { [id: string]: string; } = {};
+      Object.keys(allLayers).forEach((layerName: string) => {
+        layers[layerName] = Layer.Transform(allLayers[layerName]).AsSvgPath();
+      });
+      resolve(layers);
+      progress.stop();
+    });
+  }
+
+  private maxCountBiome(no: WorldBiome, ne: WorldBiome, so: WorldBiome, se: WorldBiome): string {
+    const counter: { [id: string]: number } = {
+      'swallowWater': 0,
+      'deepWater': 0,
+      'grass': 0,
+      'woods': 0,
+      'forest': 0,
+      'sandy': 0,
+      'beach': 0,
+      'mountain': 0,
+      'shoreline': 0,
+      'snow': 0
+    }
+    counter[WorldBiome[no]]++;
+    counter[WorldBiome[ne]]++;
+    counter[WorldBiome[so]]++;
+    counter[WorldBiome[se]]++;
+    console.log('wtf', counter, WorldBiome[Object.values(counter).indexOf(Math.max(...Object.values(counter)))])
+    return WorldBiome[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
   }
 
   public getSunShadow(width: number, height: number): Promise<Layer> {

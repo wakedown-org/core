@@ -7,6 +7,7 @@ export class BiomeColor {
   static woods = [34, 139, 34, 255];
   static forest = [0, 100, 0, 255];
   static sandy = [210, 180, 140, 255];
+  static shoreline = [238, 214, 175, 255];
   static beach = [238, 214, 175, 255];
   static mountain = [139, 137, 137, 255];
   static snow = [255, 250, 250, 255];
@@ -25,6 +26,8 @@ export class BiomeColor {
         return this.sandy;
       case WorldBiome.beach:
         return this.beach;
+      case WorldBiome.shoreline:
+        return this.shoreline;
       case WorldBiome.mountain:
         return this.mountain;
       case WorldBiome.snow:

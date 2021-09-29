@@ -1,6 +1,13 @@
 import { Point } from "./point";
 import { Vector } from "./vector";
 
+export async function *handleLayers(layers: { [id: string]: string; }) {
+  const keys = Object.keys(layers);
+  for (let i = 0; i < keys.length; i++) {
+      yield { name: keys[i], path: layers[keys[i]] };
+  }
+}
+
 export class Layer {
   constructor(public limit: Vector[] = [], public innerLayers: Layer[] = []) { }
 
@@ -53,7 +60,6 @@ export class Layer {
     this.innerLayers.forEach(layer => {
       path += layer.AsSvgPath();
     });
-    console.log('svg', path);
     return path;
   }
 
@@ -72,7 +78,6 @@ export class Layer {
         }
         closedCircuits.push(new Layer(vectors).shrunk());
       }
-      //console.log('closedCircuits', closedCircuits.length, new Date());
       const layer = new Layer();
       layer.innerLayers = closedCircuits;
       layer.Process();
