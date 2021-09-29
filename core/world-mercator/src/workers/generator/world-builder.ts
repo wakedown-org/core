@@ -9,6 +9,7 @@ import { WorldInfo } from "./_models/world-info";
 import { Converter } from "./_tools/converter";
 import { Perlin } from "./_tools/perlin.noise";
 import { Progress } from "./_tools/progress";
+import { Voronoi } from './_tools/voronoi';
 
 export class WorldBuilder {
   private noise: { raw: number[], topology: number[], trees: number[], ores: number[] } = { raw: [], topology: [], trees: [], ores: [] };
@@ -337,5 +338,27 @@ export class WorldBuilder {
       progress.stop();
       resolve(layer);
     });
+  }
+
+  private getGaussian(r: number): number[][] {
+    const rs = Math.ceil(r * 2.57); // significant radius
+    const range = rs * 2 + 1;
+    const rr2 = r * r * 2;
+    const rr2pi = rr2 * Math.PI;
+
+    const weights: number[][] = [];
+
+    for (let y = 0; y < range; y++) {
+      weights[y] = [];
+      for (let x = 0; x < range; x++) {
+        const dsq = (x - rs) ** 2 + (y - rs) ** 2 ;
+        weights[y][x] = Math.exp(-dsq / rr2) / rr2pi;
+      }
+    }
+    return weights;
+  }
+
+  private getVoronoi(sites: {x: number, y: number}[] = [{x:300,y:300}, {x:100,y:100}, {x:200,y:500}, {x:250,y:450}, {x:600,y:150}], bbox: { xl: number, xr: number, yt: number, yb: number } = {xl:0, xr:1280, yt:0, yb:800}) {
+    const voronoi = new Voronoi();
   }
 }
