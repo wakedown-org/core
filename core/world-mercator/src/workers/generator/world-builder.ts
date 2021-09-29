@@ -193,10 +193,7 @@ export class WorldBuilder {
           if (noInfo.Biome === neInfo.Biome && soInfo.Biome === seInfo.Biome && noInfo.Biome === seInfo.Biome) {
             [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[WorldBiome[noInfo.Biome]], vector));
           } else {
-            // [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => {
-            //   console.log('temço', allLayers, this.maxCountBiome(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome), vector);
-            //   Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[this.maxCountBiome(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome)], vector)
-            // });
+            [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[this.maxCountBiome(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome)], vector));
           }
         }
       }
@@ -219,15 +216,14 @@ export class WorldBuilder {
       'sandy': 0,
       'beach': 0,
       'mountain': 0,
-      'shoreline': 0,
-      'snow': 0
+      'snow': 0,
+      'shoreline': 0
     }
     counter[WorldBiome[no]]++;
     counter[WorldBiome[ne]]++;
     counter[WorldBiome[so]]++;
     counter[WorldBiome[se]]++;
-    console.log('wtf', counter, WorldBiome[Object.values(counter).indexOf(Math.max(...Object.values(counter)))])
-    return WorldBiome[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
+    return Object.keys(counter)[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
   }
 
   public getSunShadow(width: number, height: number): Promise<Layer> {
