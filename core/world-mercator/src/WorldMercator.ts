@@ -27,7 +27,7 @@ export class WorldMercator extends LitElement {
     }
 
     #shoreline {
-      fill: rgba(50, 205, 50, 255);
+      fill: rgba(0, 198, 255, 255);
     }
 
     #swallowWater {
@@ -67,9 +67,9 @@ export class WorldMercator extends LitElement {
     }
   `;
 
-  @property({ type: Number }) seed = 8;
   private _worker: Worker | null = null;
 
+  @property({ type: Number }) seed = 8;
   @property({ type: Number }) width = 1280;
   @property({ type: Number }) height = 800;
   @property({ type: Number }) scale = 1;

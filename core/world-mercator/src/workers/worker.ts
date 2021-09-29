@@ -3,7 +3,6 @@ import { Layer } from './generator/_models/layer';
 
 let seed: number;
 let world: WorldBuilder;
-let layer: Layer;
 let layers: { [id: string]: string; };
 
 self.onmessage = async (eventData: any) => {
@@ -12,10 +11,6 @@ self.onmessage = async (eventData: any) => {
 
   if (world === undefined)
     world = new WorldBuilder(seed)
-
-  // if (layer === undefined)
-  //   layer = await world.getLayer(eventData.data.width ?? 1000, eventData.data.height ?? 500);
-  // self.postMessage({ 'shoreline': layer.AsSvgPath() })
 
   if (layers === undefined)
     layers = await world.getLayers(eventData.data.width ?? 1000, eventData.data.height ?? 500);
