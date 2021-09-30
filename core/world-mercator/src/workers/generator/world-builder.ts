@@ -9,16 +9,16 @@ import { WorldInfo } from "./_models/world-info";
 import { Converter } from "./_tools/converter";
 import { Perlin } from "./_tools/perlin.noise";
 import { Progress } from "./_tools/progress";
-import { Voronoi } from './_tools/voronoi';
+import { Vertex, Voronoi } from './_tools/voronoi';
 
 export class WorldBuilder {
   private noise: { raw: number[], topology: number[], trees: number[], ores: number[] } = { raw: [], topology: [], trees: [], ores: [] };
   constructor(public seed = 8, useDefault = true, public tiltInDegree = 23.43, public oceanLevel = 0.5, public rotationSpeedInHours = 24, public numLatitudes = 12, public radius = 5000, public startDate = new Date()) {
-    this.prepareSeed(seed);
+    this.prepareSeed(this.seed);
     this.noise.raw = useDefault ? Perlin.DefaultP : Perlin.RandomP;
-    this.noise.topology = this.generateNoise(this.noise.raw, seed);
-    this.noise.trees = this.generateNoise(this.generateNewNoise(), seed);
-    this.noise.ores = this.generateNoise(this.generateNewNoise(2), seed);
+    this.noise.topology = this.generateNoise(this.noise.raw, this.seed);
+    this.noise.trees = this.generateNoise(this.generateNewNoise(), this.seed);
+    this.noise.ores = this.generateNoise(this.generateNewNoise(2), this.seed);
   }
 
   private crostaVar: { min: number, max: number } = { min: this.radius / 1000, max: this.radius / 100 };
@@ -351,14 +351,31 @@ export class WorldBuilder {
     for (let y = 0; y < range; y++) {
       weights[y] = [];
       for (let x = 0; x < range; x++) {
-        const dsq = (x - rs) ** 2 + (y - rs) ** 2 ;
+        const dsq = (x - rs) ** 2 + (y - rs) ** 2;
         weights[y][x] = Math.exp(-dsq / rr2) / rr2pi;
       }
     }
     return weights;
   }
 
-  private getVoronoi(sites: {x: number, y: number}[] = [{x:300,y:300}, {x:100,y:100}, {x:200,y:500}, {x:250,y:450}, {x:600,y:150}], bbox: { xl: number, xr: number, yt: number, yb: number } = {xl:0, xr:1280, yt:0, yb:800}) {
+  public createDeterministicRandom(): number {
+      let seed = this.seed.valueOf();
+      // Robert Jenkins’ 32 bit integer hash function
+      seed = ((seed + 0x7ED55D16) + (seed << 12))  & 0xFFFFFFFF;
+      seed = ((seed ^ 0xC761C23C) ^ (seed >>> 19)) & 0xFFFFFFFF;
+      seed = ((seed + 0x165667B1) + (seed << 5))   & 0xFFFFFFFF;
+      seed = ((seed + 0xD3A2646C) ^ (seed << 9))   & 0xFFFFFFFF;
+      seed = ((seed + 0xFD7046C5) + (seed << 3))   & 0xFFFFFFFF;
+      seed = ((seed ^ 0xB55A4F09) ^ (seed >>> 16)) & 0xFFFFFFFF;
+      return (seed & 0xFFFFFFF) / 0x10000000;
+    }
+
+  public getVoronoi(len: number, bbox: { xl: number, xr: number, yt: number, yb: number } = { xl: 0, xr: 800, yt: 0, yb: 600 }) {
     const voronoi = new Voronoi();
+    //voronoi.random = (x: number): number => this.createDeterministicRandom() * x + this.createDeterministicRandom() / x;
+    const sites = voronoi.generateSites(len, bbox);
+    const result = voronoi.compute(sites, bbox);
+
+    return { sites: sites, report: result };
   }
 }

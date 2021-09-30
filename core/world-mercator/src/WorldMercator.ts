@@ -3,6 +3,7 @@ import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
 import { asyncAppend } from 'lit/directives/async-append.js';
 import { handleLayers } from './workers/generator/_models/layer';
+import { Helper } from './workers/generator/_tools/helper';
 
 export class WorldMercator extends LitElement {
   static styles = css`
@@ -70,9 +71,10 @@ export class WorldMercator extends LitElement {
   private _worker: Worker | null = null;
 
   @property({ type: Number }) seed = 8;
-  @property({ type: Number }) width = 1280;
-  @property({ type: Number }) height = 800;
+  @property({ type: Number }) width = 880;
+  @property({ type: Number }) height = 440;
   @property({ type: Number }) scale = 1;
+  @property({ type: Number }) plates = 100;
   @property({ type: String }) loading = svg`
 <svg width="${this.width}" height="${this.height}" version="1.1" id="L6" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 100 100" xml:space="preserve">
   <rect fill="none" stroke="#000" stroke-width="4" x="25" y="25" width="50" height="50">
@@ -86,13 +88,14 @@ export class WorldMercator extends LitElement {
     if (this._worker === null) {
       this._worker = new Worker('./dist/src/workers/worker.js', { type: 'module' });
       this._worker.onmessage = (event: any) => {
-        const layersInfo = event.data as { [id: string]: string; };
+        const layersInfo = event.data.layers as { [id: string]: string; };
+        Helper.BuildVoronoi((this.shadowRoot!.getElementById('canvas') as HTMLCanvasElement).getContext('2d')!, this.width, this.height, event.data.voronoi.sites, event.data.voronoi.report);
         resolve(svg`
 <svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width * this.scale} ${this.height * this.scale}">
   ${asyncAppend(handleLayers(layersInfo), (layer: any) => svg`<path id="${layer.name}" d="${layer.path}"/>`)}
 </svg>`);
     }
-    this._worker.postMessage({ seed: this.seed, width: this.width * this.scale, height: this.height * this.scale });
+    this._worker.postMessage({ seed: this.seed, width: this.width * this.scale, height: this.height * this.scale, sitesLen: this.plates });
   }
   });
 
@@ -105,6 +108,7 @@ render() {
       <div class="world">
         ${until(this.world, this.loading)}
       </div>
+      <canvas id="canvas" width="${this.width}" height="${this.height}"></canvas>
     `;
 }
 }

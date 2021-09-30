@@ -8,6 +8,7 @@ export class Voronoi {
   public circleEvents!: RBTree;
   public firstCircleEvent: CircleEvent | null = null;
 
+  public random = (x: number): number => Math.random() * x + Math.random() / x;
   private sqrt = Math.sqrt;
   private abs = Math.abs;
   private ε = 1e-9;
@@ -24,7 +25,7 @@ export class Voronoi {
   public edgeJunkyard: Edge[] = [];
   public cellJunkyard: Cell[] = [];
 
-  reset() {
+  public reset() {
     if (this.beachline === null) {
       this.beachline = new RBTree();
     }
@@ -300,9 +301,9 @@ export class Voronoi {
     // created beach section.
     // rhill 2011-06-01: This loop is one of the most often executed,
     // hence we expand in-place the comparison-against-epsilon calls.
-    var lArc: CircleEvent | null, 
+    var lArc: CircleEvent | null,
       rArc: CircleEvent | null,
-      dxl, 
+      dxl,
       dxr,
       node = this.beachline!.root;
 
@@ -587,7 +588,7 @@ export class Voronoi {
       ry = rSite!.y,
       fx = (lx + rx) / 2,
       fy = (ly + ry) / 2,
-      fm = 0, 
+      fm = 0,
       fb = 0;
 
     // if we reach here, this means cells which use this edge will need
@@ -970,6 +971,107 @@ export class Voronoi {
         throw 'Voronoi.recycleDiagram() > Need a Diagram object.';
       }
     }
+  }
+
+  generateSites(siteLen: number, bbox: { xl: number, xr: number, yt: number, yb: number }): Vertex[] {
+    const ret: Vertex[] = [];
+    for (let i = 0; i < siteLen; i++) {
+      ret.push(new Vertex(bbox.xl + this.random(bbox.xr), bbox.yt + this.random(bbox.yb)));
+    }
+    console.log('sites', ret);
+    return ret;
+  }
+
+  compute(sites: Vertex[], bbox: { xl: number, xr: number, yt: number, yb: number }) {
+    // to measure execution time
+    var startTime = new Date();
+
+    // init internal state
+    this.reset();
+
+    // any diagram data available for recycling?
+    // I do that here so that this is included in execution time
+    if (this.toRecycle) {
+      this.vertexJunkyard = this.vertexJunkyard.concat(this.toRecycle.vertices!);
+      this.edgeJunkyard = this.edgeJunkyard.concat(this.toRecycle.edges!);
+      this.cellJunkyard = this.cellJunkyard.concat(this.toRecycle.cells!);
+      this.toRecycle = null;
+    }
+
+    // Initialize site event queue
+    var siteEvents = sites.slice(0);
+    siteEvents.sort(function (a, b) {
+      var r = b.y - a.y;
+      if (r) { return r; }
+      return b.x - a.x;
+    });
+
+    // process queue
+    var site = siteEvents.pop(),
+      siteid = 0,
+      xsitex, // to avoid duplicate sites
+      xsitey,
+      cells = this.cells,
+      circle;
+
+    // main loop
+    for (; ;) {
+      // we need to figure whether we handle a site or circle event
+      // for this we find out if there is a site event and it is
+      // 'earlier' than the circle event
+      circle = this.firstCircleEvent;
+
+      // add beach section
+      if (site && (!circle || site.y < circle.y || (site.y === circle.y && site.x < circle.x))) {
+        // only if site is not a duplicate
+        if (site.x !== xsitex || site.y !== xsitey) {
+          // first create cell for new site
+          cells[siteid] = this.createCell(site);
+          site.voronoiId = siteid++;
+          // then create a beachsection for that site
+          this.addBeachsection(site);
+          // remember last site coords to detect duplicate
+          xsitey = site.y;
+          xsitex = site.x;
+        }
+        site = siteEvents.pop();
+      }
+
+      // remove beach section
+      else if (circle) {
+        this.removeBeachsection(circle.arc!);
+      }
+
+      // all done, quit
+      else {
+        break;
+      }
+    }
+
+    // wrapping-up:
+    //   connect dangling edges to bounding box
+    //   cut edges as per bounding box
+    //   discard edges completely outside bounding box
+    //   discard edges which are point-like
+    this.clipEdges(bbox);
+
+    //   add missing edges in order to close opened cells
+    this.closeCells(bbox);
+
+    // to measure execution time
+    var stopTime = new Date();
+
+    // prepare return values
+    var diagram = new Diagram();
+    diagram.cells = this.cells;
+    diagram.edges = this.edges;
+    diagram.vertices = this.vertices;
+    diagram.execTime = stopTime.getTime() - startTime.getTime();
+
+    // clean up
+    this.reset();
+
+    return diagram;
   }
 }
 
