@@ -1,11 +1,8 @@
 import { WorldBuilder } from './generator/world-builder';
-import { Layer } from './generator/_models/layer';
-import { Vertex } from './generator/_tools/voronoi';
 
 let seed: number;
 let world: WorldBuilder;
 let layers: { [id: string]: string; };
-let sites: Vertex[] = [];
 
 self.onmessage = async (eventData: any) => {
   if (seed === undefined)
@@ -16,8 +13,6 @@ self.onmessage = async (eventData: any) => {
 
   if (layers === undefined)
     layers = await world.getLayers(eventData.data.width ?? 1000, eventData.data.height ?? 500);
-
-  
 
   const msg = {
     layers: layers,

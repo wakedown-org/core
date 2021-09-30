@@ -1,3 +1,8 @@
+/*
+just translated to typescript
+Copyright (C) 2010-2013 Raymond Hill: https://github.com/gorhill/Javascript-Voronoi
+MIT License: See https://github.com/gorhill/Javascript-Voronoi/LICENSE.md
+*/
 export class Voronoi {
   public cells: Cell[] = [];
   public edges: Edge[] = [];

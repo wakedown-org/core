@@ -1,4 +1,5 @@
 import { BiomeColor } from "../_models/biome-color";
+import { Point } from "../_models/point";
 import { WorldInfo } from "../_models/world-info";
 import { Converter } from "./converter";
 import { Diagram, Vertex } from "./voronoi";
@@ -16,6 +17,28 @@ export class Helper {
     // element.style.strokeWidth = style.strokeWidth;
     svg.appendChild(element);
   }
+
+  public static FindPeaksAndValleys(points: WorldInfo[], width: number, height: number): { peaks: Point[], valleys: Point[] } {
+    const ret: { peaks: Point[], valleys: Point[] } = { peaks: [], valleys: [] };
+
+    const altPoints = points.map(p => {
+      const n = Math.max(0.0, Math.min(1.0, p.topology));
+      return { coordinate: p.coordinate, value: String.fromCharCode(Math.floor(n == 1.0 ? 255 : n * 256.0)) }
+    });
+
+    return ret;
+  }
+
+  public static levenshteinDistance (s: string, t: string): number {
+    if (!s.length) return t.length;
+    if (!t.length) return s.length;
+
+    return Math.min(
+        this.levenshteinDistance(s.substr(1), t) + 1,
+        this.levenshteinDistance(t.substr(1), s) + 1,
+        this.levenshteinDistance(s.substr(1), t.substr(1)) + (s[0] !== t[0] ? 1 : 0)
+    ) + 1;
+}
 
   public static BuildImage(context: CanvasRenderingContext2D, points: WorldInfo[], width: number, height: number) {
     const image = context.createImageData(width, height);

@@ -74,7 +74,7 @@ export class WorldMercator extends LitElement {
   @property({ type: Number }) width = 880;
   @property({ type: Number }) height = 440;
   @property({ type: Number }) scale = 1;
-  @property({ type: Number }) plates = 100;
+  @property({ type: Number }) plates = 10;
   @property({ type: String }) loading = svg`
 <svg width="${this.width}" height="${this.height}" version="1.1" id="L6" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 100 100" xml:space="preserve">
   <rect fill="none" stroke="#000" stroke-width="4" x="25" y="25" width="50" height="50">
