@@ -370,10 +370,10 @@ export class WorldBuilder {
       return (seed & 0xFFFFFFF) / 0x10000000;
     }
 
-  public getVoronoi(len: number, bbox: { xl: number, xr: number, yt: number, yb: number } = { xl: 0, xr: 800, yt: 0, yb: 600 }) {
+  public getVoronoi(sites: Vertex[], bbox: { xl: number, xr: number, yt: number, yb: number } = { xl: 0, xr: 800, yt: 0, yb: 600 }) {
     const voronoi = new Voronoi();
     //voronoi.random = (x: number): number => this.createDeterministicRandom() * x + this.createDeterministicRandom() / x;
-    const sites = voronoi.generateSites(len, bbox);
+    // const sites = voronoi.generateSites(len, bbox);
     const result = voronoi.compute(sites, bbox);
 
     return { sites: sites, report: result };

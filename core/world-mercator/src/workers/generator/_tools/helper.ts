@@ -1,4 +1,5 @@
 import { BiomeColor } from "../_models/biome-color";
+import { Coordinate } from "../_models/coordinate";
 import { Point } from "../_models/point";
 import { WorldInfo } from "../_models/world-info";
 import { Converter } from "./converter";
@@ -18,27 +19,65 @@ export class Helper {
     svg.appendChild(element);
   }
 
-  public static FindPeaksAndValleys(points: WorldInfo[], width: number, height: number): { peaks: Point[], valleys: Point[] } {
-    const ret: { peaks: Point[], valleys: Point[] } = { peaks: [], valleys: [] };
+  public static FindPeaksAndValleys(points: WorldInfo[]): { peaks: WorldInfo[], valleys: WorldInfo[] } {
+    const ret: { peaks: WorldInfo[], valleys: WorldInfo[] } = { peaks: [], valleys: [] };
 
-    const altPoints = points.map(p => {
+    const altPoints = points.map((p) => {
       const n = Math.max(0.0, Math.min(1.0, p.topology));
-      return { coordinate: p.coordinate, value: String.fromCharCode(Math.floor(n == 1.0 ? 255 : n * 256.0)) }
+      return { coordinate: p.coordinate, info: p, value: Math.floor(n == 1.0 ? 255 : n * 256.0) }
     });
 
+    const checkPeak: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
+    const checkValley: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
+    altPoints.forEach((p) => {
+      if (!checkPeak.some((pe) => p.value > pe.value && this.isClose(pe.coordinate, p.coordinate))) {
+        const oldPeaks = checkPeak.filter((pe) => this.isClose(pe.coordinate, p.coordinate));
+        oldPeaks.forEach((pe) => this.removeItem(checkPeak, pe));
+        checkPeak.push(p);
+      }
+      if (!checkValley.some((va) => p.value < va.value && this.isClose(va.coordinate, p.coordinate))) {
+        const oldValleys = checkValley.filter((va) => this.isClose(va.coordinate, p.coordinate));
+        oldValleys.forEach((va) => this.removeItem(checkValley, va));
+        checkValley.push(p);
+      }
+    });
+
+    ret.peaks = checkPeak.map((pe) => pe.info);
+    ret.valleys = checkValley.map((va) => va.info);
     return ret;
   }
 
-  public static levenshteinDistance (s: string, t: string): number {
-    if (!s.length) return t.length;
-    if (!t.length) return s.length;
+  public static isClose(a: Coordinate, b: Coordinate, margin = 42): boolean {
+    return (Math.abs(a.latitude - b.latitude) < margin && Math.abs(a.longitude - b.longitude) < margin);
+  }
 
-    return Math.min(
-        this.levenshteinDistance(s.substr(1), t) + 1,
-        this.levenshteinDistance(t.substr(1), s) + 1,
-        this.levenshteinDistance(s.substr(1), t.substr(1)) + (s[0] !== t[0] ? 1 : 0)
-    ) + 1;
-}
+  public static removeItem(arr: any[], value: any): any[] {
+    var index = arr.indexOf(value);
+    if (index > -1) {
+      arr.splice(index, 1);
+    }
+    return arr;
+  }
+
+  public static levenshteinDistance(a: string, b: string): number {
+    var tmp;
+    if (a.length === 0) { return b.length; }
+    if (b.length === 0) { return a.length; }
+    if (a.length > b.length) { tmp = a; a = b; b = tmp; }
+
+    var i, j, res, alen = a.length, blen = b.length, row = Array(alen);
+    for (i = 0; i <= alen; i++) { row[i] = i; }
+
+    for (i = 1; i <= blen; i++) {
+      res = i;
+      for (j = 1; j <= alen; j++) {
+        tmp = row[j - 1];
+        row[j - 1] = res;
+        res = b[i - 1] === a[j - 1] ? tmp : Math.min(tmp + 1, Math.min(res + 1, row[j] + 1));
+      }
+    }
+    return res;
+  }
 
   public static BuildImage(context: CanvasRenderingContext2D, points: WorldInfo[], width: number, height: number) {
     const image = context.createImageData(width, height);
@@ -60,7 +99,7 @@ export class Helper {
     ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.rect(0, 0, width, height);
-    ctx.fillStyle = 'grey';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.fill();
     ctx.strokeStyle = '#888';
     ctx.stroke();
@@ -92,7 +131,7 @@ export class Helper {
     ctx.fill();
     // sites
     ctx.beginPath();
-    ctx.fillStyle = '#44f';
+    ctx.fillStyle = 'purple';
     var iSite = sites.length;
     while (iSite--) {
       v = sites[iSite];
