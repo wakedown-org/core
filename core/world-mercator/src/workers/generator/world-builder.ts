@@ -7,6 +7,7 @@ import { Vector } from "./_models/vector";
 import { WorldBiome } from "./_models/world-biome";
 import { WorldInfo } from "./_models/world-info";
 import { Converter } from "./_tools/converter";
+import { Helper } from "./_tools/helper";
 import { Perlin } from "./_tools/perlin.noise";
 import { Progress } from "./_tools/progress";
 import { Vertex, Voronoi } from './_tools/voronoi';
@@ -132,6 +133,42 @@ export class WorldBuilder {
           ret.push(info);
         }
       }
+      progress.stop();
+      resolve(ret);
+    });
+  }
+
+  public GetPeaksAndValleys(width: number, height: number): Promise<{ peaks: WorldInfo[], valleys: WorldInfo[] }> {
+    return new Promise<{ peaks: WorldInfo[], valleys: WorldInfo[] }>((resolve) => {
+      const progress = new Progress('GetPeaksAndValleys', width * height, false);
+      const altPoints: { coordinate: Coordinate, info: WorldInfo, value: number }[] = [];
+      for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+          const info = this.GetInformation(Converter.FromMercator(new Point(x, y, 0), width, height), 1);
+          const n = 1 - Math.max(0.0, Math.min(1.0, info.topology));
+          altPoints.push({ coordinate: info.coordinate, info: info, value: Math.floor(n == 1.0 ? 255 : n * 256.0) });
+        }
+      }
+
+      const checkPeak: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
+      const checkValley: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
+      altPoints.forEach((p) => {
+        if (!checkPeak.some((pe) => p.value > pe.value && pe.coordinate.isClose(p.coordinate))) {
+          const oldPeaks = checkPeak.filter((pe) => pe.coordinate.isClose(p.coordinate));
+          oldPeaks.forEach((pe) => Helper.removeItem(checkPeak, pe));
+          checkPeak.push(p);
+        }
+        if (!checkValley.some((va) => p.value < va.value && va.coordinate.isClose(p.coordinate))) {
+          const oldValleys = checkValley.filter((va) => va.coordinate.isClose(p.coordinate));
+          oldValleys.forEach((va) => Helper.removeItem(checkValley, va));
+          checkValley.push(p);
+        }
+      });
+
+      const ret: { peaks: WorldInfo[], valleys: WorldInfo[] } = { peaks: [], valleys: [] };
+      ret.peaks = checkPeak.map((pe) => pe.info);
+      ret.valleys = checkValley.map((va) => va.info);
+
       progress.stop();
       resolve(ret);
     });
@@ -359,23 +396,29 @@ export class WorldBuilder {
   }
 
   public createDeterministicRandom(): number {
-      let seed = this.seed.valueOf();
-      // Robert Jenkins’ 32 bit integer hash function
-      seed = ((seed + 0x7ED55D16) + (seed << 12))  & 0xFFFFFFFF;
-      seed = ((seed ^ 0xC761C23C) ^ (seed >>> 19)) & 0xFFFFFFFF;
-      seed = ((seed + 0x165667B1) + (seed << 5))   & 0xFFFFFFFF;
-      seed = ((seed + 0xD3A2646C) ^ (seed << 9))   & 0xFFFFFFFF;
-      seed = ((seed + 0xFD7046C5) + (seed << 3))   & 0xFFFFFFFF;
-      seed = ((seed ^ 0xB55A4F09) ^ (seed >>> 16)) & 0xFFFFFFFF;
-      return (seed & 0xFFFFFFF) / 0x10000000;
-    }
+    let seed = this.seed.valueOf();
+    // Robert Jenkins’ 32 bit integer hash function
+    seed = ((seed + 0x7ED55D16) + (seed << 12)) & 0xFFFFFFFF;
+    seed = ((seed ^ 0xC761C23C) ^ (seed >>> 19)) & 0xFFFFFFFF;
+    seed = ((seed + 0x165667B1) + (seed << 5)) & 0xFFFFFFFF;
+    seed = ((seed + 0xD3A2646C) ^ (seed << 9)) & 0xFFFFFFFF;
+    seed = ((seed + 0xFD7046C5) + (seed << 3)) & 0xFFFFFFFF;
+    seed = ((seed ^ 0xB55A4F09) ^ (seed >>> 16)) & 0xFFFFFFFF;
+    return (seed & 0xFFFFFFF) / 0x10000000;
+  }
 
-  public getVoronoi(sites: Vertex[], bbox: { xl: number, xr: number, yt: number, yb: number } = { xl: 0, xr: 800, yt: 0, yb: 600 }) {
+  public async RenderVoronoi(points: { peaks: WorldInfo[], valleys: WorldInfo[] }, width: number = 1000, height: number = 500): Promise<{ [id: string]: string; }> {
+    const sites: Vertex[] = points.peaks.map(p => Converter.ToMercator(p.coordinate, width, height)).map(p => new Vertex(p.X, p.Y));
+    sites.push(...points.valleys.map(p => Converter.ToMercator(p.coordinate, width, height)).map(p => new Vertex(p.X, p.Y)))
     const voronoi = new Voronoi();
-    //voronoi.random = (x: number): number => this.createDeterministicRandom() * x + this.createDeterministicRandom() / x;
-    // const sites = voronoi.generateSites(len, bbox);
-    const result = voronoi.compute(sites, bbox);
+    const result = voronoi.compute(sites, { xl: 0, xr: width, yt: 0, yb: height });
+    const cells: { [id: string]: Vector[] } = {};
+    result.cells?.forEach((cell, idx) => cells[`cell_${idx}`] = cell.halfedges.map((he) => new Vector(new Point(he.edge.va!.x, he.edge.va!.y, 1), new Point(he.edge.vb!.x, he.edge.vb!.y, 1))));
+    const layers: { [id: string]: string; } = {};
+    Object.keys(cells).forEach((layername: string) => {
+      layers[`cell_${layername}`] = Layer.Transform(cells[layername]).AsSvgPath();
+    });
 
-    return { sites: sites, report: result };
+    return layers;
   }
 }

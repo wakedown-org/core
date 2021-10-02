@@ -1,13 +1,6 @@
 import { Point } from "./point";
 import { Vector } from "./vector";
 
-export async function *handleLayers(layers: { [id: string]: string; }) {
-  const keys = Object.keys(layers);
-  for (let i = 0; i < keys.length; i++) {
-      yield { name: keys[i], path: layers[keys[i]] };
-  }
-}
-
 export class Layer {
   constructor(public limit: Vector[] = [], public innerLayers: Layer[] = []) { }
 
@@ -72,8 +65,16 @@ export class Layer {
         vectors.push(startVector.copy);
         let runner = startVector.copy;
         while (!runner.end.equals(startVector.start)) {
-          const vectorIdx = copyVectors.findIndex((v) => runner.end.equals(v.start));
-          runner = copyVectors.splice(vectorIdx, 1)[0];
+          let vectorIdx = copyVectors.findIndex((v) => runner.end.equals(v.start));
+          let isInverted = false;
+          if (vectorIdx === -1) { 
+            vectorIdx = copyVectors.findIndex((v) => runner.end.equals(v.end)); 
+            isInverted = true;
+          }
+          runner = copyVectors.splice(vectorIdx, 1)[0].copy;
+          if (isInverted) { 
+            runner = new Vector(runner.end, runner.start);
+          }
           vectors.push(runner.copy);
         }
         closedCircuits.push(new Layer(vectors).shrunk());

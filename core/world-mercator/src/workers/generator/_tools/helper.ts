@@ -1,9 +1,24 @@
 import { BiomeColor } from "../_models/biome-color";
 import { Coordinate } from "../_models/coordinate";
+import { Layer } from "../_models/layer";
 import { Point } from "../_models/point";
+import { Vector } from "../_models/vector";
 import { WorldInfo } from "../_models/world-info";
 import { Converter } from "./converter";
-import { Diagram, Vertex } from "./voronoi";
+import { Diagram, Vertex, Voronoi } from "./voronoi";
+
+export async function *handleArray<T>(array: T[]) {
+  for (let i = 0; i < array.length; i++) {
+      yield array[i];
+  }
+}
+
+export async function *handleLayers(layers: { [id: string]: string; }) {
+  const keys = Object.keys(layers);
+  for (let i = 0; i < keys.length; i++) {
+      yield { name: keys[i], path: layers[keys[i]] };
+  }
+}
 
 export class Helper {
   public static TruncDecimals(num: number, precision = 5): number {
@@ -17,38 +32,6 @@ export class Helper {
     // element.style.fillOpacity = style.fillOpacity;
     // element.style.strokeWidth = style.strokeWidth;
     svg.appendChild(element);
-  }
-
-  public static FindPeaksAndValleys(points: WorldInfo[]): { peaks: WorldInfo[], valleys: WorldInfo[] } {
-    const ret: { peaks: WorldInfo[], valleys: WorldInfo[] } = { peaks: [], valleys: [] };
-
-    const altPoints = points.map((p) => {
-      const n = Math.max(0.0, Math.min(1.0, p.topology));
-      return { coordinate: p.coordinate, info: p, value: Math.floor(n == 1.0 ? 255 : n * 256.0) }
-    });
-
-    const checkPeak: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
-    const checkValley: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
-    altPoints.forEach((p) => {
-      if (!checkPeak.some((pe) => p.value > pe.value && this.isClose(pe.coordinate, p.coordinate))) {
-        const oldPeaks = checkPeak.filter((pe) => this.isClose(pe.coordinate, p.coordinate));
-        oldPeaks.forEach((pe) => this.removeItem(checkPeak, pe));
-        checkPeak.push(p);
-      }
-      if (!checkValley.some((va) => p.value < va.value && this.isClose(va.coordinate, p.coordinate))) {
-        const oldValleys = checkValley.filter((va) => this.isClose(va.coordinate, p.coordinate));
-        oldValleys.forEach((va) => this.removeItem(checkValley, va));
-        checkValley.push(p);
-      }
-    });
-
-    ret.peaks = checkPeak.map((pe) => pe.info);
-    ret.valleys = checkValley.map((va) => va.info);
-    return ret;
-  }
-
-  public static isClose(a: Coordinate, b: Coordinate, margin = 42): boolean {
-    return (Math.abs(a.latitude - b.latitude) < margin && Math.abs(a.longitude - b.longitude) < margin);
   }
 
   public static removeItem(arr: any[], value: any): any[] {

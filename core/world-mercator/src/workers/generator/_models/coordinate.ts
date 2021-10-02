@@ -9,4 +9,8 @@ export class Coordinate {
   public addLongitude(value: number, precision = 5) {
     return new Coordinate(this.latitude, Helper.TruncDecimals(this.longitude + value, precision));
   }
+
+  public isClose(a: Coordinate, margin = 42): boolean {
+    return (Math.abs(a.latitude - this.latitude) < margin && Math.abs(a.longitude - this.longitude) < margin);
+  }
 }

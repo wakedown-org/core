@@ -2,8 +2,8 @@ import { svg, css, LitElement } from 'lit';
 import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
 import { asyncAppend } from 'lit/directives/async-append.js';
-import { handleLayers } from './workers/generator/_models/layer';
-import { Helper } from './workers/generator/_tools/helper';
+import { handleArray, handleLayers } from './workers/generator/_tools/helper';
+import { Point } from './workers/generator/_models/point';
 
 export class WorldMercator extends LitElement {
   static styles = css`
@@ -77,6 +77,20 @@ export class WorldMercator extends LitElement {
     #snow {
       fill: rgba(255, 250, 250, 255);
     }
+
+    .cell {
+      opacity: 0.5;
+      fill: none;
+      stroke: black;
+    }
+
+    .peak {
+      fill: red;
+    }
+
+    .valley {
+      fill: orange;
+    }
   `;
 
   private _worker: Worker | null = null;
@@ -98,10 +112,13 @@ export class WorldMercator extends LitElement {
     if (this._worker === null) {
       this._worker = new Worker('./dist/src/workers/worker.js', { type: 'module' });
       this._worker.onmessage = (event: any) => {
-        Helper.BuildVoronoi((this.shadowRoot!.getElementById('canvas') as HTMLCanvasElement).getContext('2d')!, this.width, this.height, event.data.voronoi.sites, event.data.voronoi.report);
+        const data = event.data as { layers: { [id: string]: string; }, voronoi: { [id: string]: string; }, sites: { peaks: Point[], valleys: Point[] }};
         resolve(svg`
 <svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width * this.scale} ${this.height * this.scale}">
-  ${asyncAppend(handleLayers(event.data.layers as { [id: string]: string; }), (layer: any) => svg`<path id="${layer.name}" d="${layer.path}"/>`)}
+  ${asyncAppend(handleLayers(data.layers), (layer: any) => svg`<path id="${layer.name}" d="${layer.path}"/>`)}
+  ${asyncAppend(handleLayers(data.voronoi), (layer: any) => svg`<path class="cell" id="${layer.name}" d="${layer.path}"/>`)}
+  ${asyncAppend(handleArray(data.sites.peaks), (point: any) => svg`<circle class="peak" cx="${point.X}" cy="${point.Y}" r="2"/>`)}
+  ${asyncAppend(handleArray(data.sites.valleys), (point: any) => svg`<circle class="valley" cx="${point.X}" cy="${point.Y}" r="2"/>`)}
 </svg>`);
     }
     this._worker.postMessage({ seed: this.seed, width: this.width * this.scale, height: this.height * this.scale });
@@ -117,7 +134,6 @@ render() {
       <div class="world">
         ${until(this.world, this.loading)}
       </div>
-      <canvas id="canvas" width="${this.width}" height="${this.height}"></canvas>
     `;
 }
 }

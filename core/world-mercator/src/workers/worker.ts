@@ -1,12 +1,12 @@
 import { WorldBuilder } from './generator/world-builder';
+import { Point } from './generator/_models/point';
 import { Converter } from './generator/_tools/converter';
-import { Helper } from './generator/_tools/helper';
-import { Vertex } from './generator/_tools/voronoi';
 
 let seed: number;
 let world: WorldBuilder;
 let layers: { [id: string]: string; };
-let sites: Vertex[];
+let voronoi: { [id: string]: string; };
+let sites: { peaks: Point[], valleys: Point[] };
 
 self.onmessage = async (eventData: any) => {
   if (seed === undefined)
@@ -19,14 +19,18 @@ self.onmessage = async (eventData: any) => {
     layers = await world.getLayers(eventData.data.width ?? 1000, eventData.data.height ?? 500);
 
   if (sites === undefined) {
-    const peaksValleys = Helper.FindPeaksAndValleys(await world.GetAllMercatorPoints(eventData.data.width ?? 1000, eventData.data.height ?? 500));
-    sites = peaksValleys.peaks.map((pe) => Converter.ToMercator(pe.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500)).map((pe) => new Vertex(pe.X, pe.Y));
-    sites.push(...peaksValleys.valleys.map((va) => Converter.ToMercator(va.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500)).map((va) => new Vertex(va.X, va.Y)));
+    const peaksValleys = await world.GetPeaksAndValleys(eventData.data.width ?? 1000, eventData.data.height ?? 500);
+    voronoi = await world.RenderVoronoi(peaksValleys, eventData.data.width ?? 1000, eventData.data.height ?? 500);
+    sites = {
+      peaks: peaksValleys.peaks.map((pe) => Converter.ToMercator(pe.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500)),
+      valleys: peaksValleys.valleys.map((va) => Converter.ToMercator(va.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500))
+    };
   }
 
   const msg = {
     layers: layers,
-    voronoi: world.getVoronoi(sites, { xl: 0, xr: eventData.data.width, yt: 0, yb: eventData.data.height })
+    voronoi: voronoi,
+    sites: sites
   }
 
   self.postMessage(msg);

@@ -6,6 +6,31 @@ import { WorldBiome } from "./world-biome";
 export class WorldInfo {
   public constructor(public topology: number, public trees: number, public ores: number, public coordinate: Coordinate, public point: Point) { }
 
+  // public get Biome(): WorldBiome {
+  //   if (this.topology > 0.90) {
+  //     return WorldBiome.snow;
+  //   } else if (this.topology > 0.80) {
+  //     return WorldBiome.mountain;
+  //   } else if (this.topology > 0.75) {
+  //     return WorldBiome.forest;
+  //   } else if (this.topology > 0.70) {
+  //     return WorldBiome.woods;
+  //   } else if (this.topology > 0.62) {
+  //     return WorldBiome.grass;
+  //   } else if (this.topology > 0.56) {
+  //     return WorldBiome.sandy;
+  //   } else if (this.topology > 0.53) {
+  //     return WorldBiome.beach;
+  //   } else if (this.topology === 0.50) {
+  //     return WorldBiome.shoreline;
+  //   } else if (this.topology > 0.50) {
+  //     return WorldBiome.swallowWater;
+  //   } else if (this.topology > 0.35) {
+  //     return WorldBiome.deepWater;
+  //   }
+  //   return WorldBiome.grass;
+  // };
+
   public get Biome(): WorldBiome {
     if (this.topology < 0.35) {
       return WorldBiome.deepWater;
