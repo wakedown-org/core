@@ -11,6 +11,7 @@ import { Helper } from "./_tools/helper";
 import { Perlin } from "./_tools/perlin.noise";
 import { Progress } from "./_tools/progress";
 import { Vertex, Voronoi } from './_tools/voronoi';
+import { PseudoRandomMachine } from './_tools/pseudo-random-machine';
 
 export class WorldBuilder {
   private noise: { raw: number[], topology: number[], trees: number[], ores: number[] } = { raw: [], topology: [], trees: [], ores: [] };
@@ -138,12 +139,14 @@ export class WorldBuilder {
     });
   }
 
-  public GetPeaksAndValleys(width: number, height: number): Promise<{ peaks: WorldInfo[], valleys: WorldInfo[] }> {
+  public GetPeaksAndValleys(width: number, height: number, margin: number = 42): Promise<{ peaks: WorldInfo[], valleys: WorldInfo[] }> {
     return new Promise<{ peaks: WorldInfo[], valleys: WorldInfo[] }>((resolve) => {
       const progress = new Progress('GetPeaksAndValleys', width * height, false);
+      // const randomMachine = new PseudoRandomMachine(this.seed);
       const altPoints: { coordinate: Coordinate, info: WorldInfo, value: number }[] = [];
       for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
+          // const siteRadius = randomMachine.random * margin;
           const info = this.GetInformation(Converter.FromMercator(new Point(x, y, 0), width, height), 1);
           const n = 1 - Math.max(0.0, Math.min(1.0, info.topology));
           altPoints.push({ coordinate: info.coordinate, info: info, value: Math.floor(n == 1.0 ? 255 : n * 256.0) });
@@ -153,13 +156,13 @@ export class WorldBuilder {
       const checkPeak: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
       const checkValley: { coordinate: Coordinate, info: WorldInfo, value: number }[] = []
       altPoints.forEach((p) => {
-        if (!checkPeak.some((pe) => p.value > pe.value && pe.coordinate.isClose(p.coordinate))) {
-          const oldPeaks = checkPeak.filter((pe) => pe.coordinate.isClose(p.coordinate));
+        if (!checkPeak.some((pe) => p.value > pe.value && pe.coordinate.isClose(p.coordinate, margin))) {
+          const oldPeaks = checkPeak.filter((pe) => pe.coordinate.isClose(p.coordinate, margin));
           oldPeaks.forEach((pe) => Helper.removeItem(checkPeak, pe));
           checkPeak.push(p);
         }
-        if (!checkValley.some((va) => p.value < va.value && va.coordinate.isClose(p.coordinate))) {
-          const oldValleys = checkValley.filter((va) => va.coordinate.isClose(p.coordinate));
+        if (!checkValley.some((va) => p.value < va.value && va.coordinate.isClose(p.coordinate, margin))) {
+          const oldValleys = checkValley.filter((va) => va.coordinate.isClose(p.coordinate, margin));
           oldValleys.forEach((va) => Helper.removeItem(checkValley, va));
           checkValley.push(p);
         }
@@ -377,34 +380,14 @@ export class WorldBuilder {
     });
   }
 
-  private getGaussian(r: number): number[][] {
+  private getGaussianWeight(x: number, y: number, r: number): number {
     const rs = Math.ceil(r * 2.57); // significant radius
     const range = rs * 2 + 1;
     const rr2 = r * r * 2;
     const rr2pi = rr2 * Math.PI;
 
-    const weights: number[][] = [];
-
-    for (let y = 0; y < range; y++) {
-      weights[y] = [];
-      for (let x = 0; x < range; x++) {
-        const dsq = (x - rs) ** 2 + (y - rs) ** 2;
-        weights[y][x] = Math.exp(-dsq / rr2) / rr2pi;
-      }
-    }
-    return weights;
-  }
-
-  public createDeterministicRandom(): number {
-    let seed = this.seed.valueOf();
-    // Robert Jenkins’ 32 bit integer hash function
-    seed = ((seed + 0x7ED55D16) + (seed << 12)) & 0xFFFFFFFF;
-    seed = ((seed ^ 0xC761C23C) ^ (seed >>> 19)) & 0xFFFFFFFF;
-    seed = ((seed + 0x165667B1) + (seed << 5)) & 0xFFFFFFFF;
-    seed = ((seed + 0xD3A2646C) ^ (seed << 9)) & 0xFFFFFFFF;
-    seed = ((seed + 0xFD7046C5) + (seed << 3)) & 0xFFFFFFFF;
-    seed = ((seed ^ 0xB55A4F09) ^ (seed >>> 16)) & 0xFFFFFFFF;
-    return (seed & 0xFFFFFFF) / 0x10000000;
+    const dsq = (x - rs) ** 2 + (y - rs) ** 2;
+    return Math.exp(-dsq / rr2) / rr2pi;
   }
 
   public async RenderVoronoi(points: { peaks: WorldInfo[], valleys: WorldInfo[] }, width: number = 1000, height: number = 500): Promise<{ [id: string]: string; }> {
