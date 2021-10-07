@@ -1,7 +1,7 @@
 import { Coordinate } from "../_models/coordinate";
 import { Point } from "../_models/point";
 
-/*
+/* surface area  510065623km^2 ~ 22584km
 * latitude - Polo Norte 90° / Polo Sul -90° / Equador 0°
 * longitudade - Leste 180° / Oeste -180° / Greenwich 0°
 * em termos de latitude
@@ -33,12 +33,20 @@ export class Converter {
     return angle * (Math.PI / 180);
   }
 
+  public static ArcLength(radius: number, angle: number) {
+    return radius * Math.PI * 2 * (angle / 360)
+  }
+
+  public static AngleFromArcLength(arc: number, radius: number) {
+    return (arc * 180) / (Math.PI * radius);
+  }
+
   public static LongitudeLength(latitude: number, radius: number): number {
     return (Math.PI / 180) * radius * Math.cos(latitude);
   }
 
   public static ToMercator(coordinate: Coordinate, width: number, height: number): Point {
-    return new Point(Math.round((coordinate.longitude + 180)/(360 / width)), Math.round((coordinate.latitude + 90)/(180 / height)), 0);
+    return new Point(Math.round((coordinate.longitude + 180) / (360 / width)), Math.round((coordinate.latitude + 90) / (180 / height)), 0);
   }
 
   public static FromMercator(point: Point, width: number, height: number): Coordinate {

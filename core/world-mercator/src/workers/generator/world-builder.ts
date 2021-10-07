@@ -380,14 +380,10 @@ export class WorldBuilder {
     });
   }
 
-  private getGaussianWeight(x: number, y: number, r: number): number {
-    const rs = Math.ceil(r * 2.57); // significant radius
-    const range = rs * 2 + 1;
-    const rr2 = r * r * 2;
-    const rr2pi = rr2 * Math.PI;
-
-    const dsq = (x - rs) ** 2 + (y - rs) ** 2;
-    return Math.exp(-dsq / rr2) / rr2pi;
+  private getGaussian(d: number, w: number, a = 0.5, b = 8): number {
+    let n = Math.trunc(b*w);
+    if (n % 2 !== 0) n += 1;
+    return a * Math.exp(-d * Math.exp(1) / w) ** n;
   }
 
   public async RenderVoronoi(points: { peaks: WorldInfo[], valleys: WorldInfo[] }, width: number = 1000, height: number = 500): Promise<{ [id: string]: string; }> {
