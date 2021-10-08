@@ -62,6 +62,12 @@ export class Helper {
     return res;
   }
 
+  public static getGaussian(d: number, w: number, a = 0.5, b = 2): number {
+    let n = Math.trunc(b*w);
+    if (n % 2 !== 0) n += 1;
+    return a * Math.exp(-d * Math.exp(1) / w) ** n;
+  }
+
   public static BuildImage(context: CanvasRenderingContext2D, points: WorldInfo[], width: number, height: number) {
     const image = context.createImageData(width, height);
     const data = image.data;

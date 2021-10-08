@@ -10,7 +10,7 @@ import { Converter } from "./_tools/converter";
 import { Helper } from "./_tools/helper";
 import { Perlin } from "./_tools/perlin.noise";
 import { Progress } from "./_tools/progress";
-import { Vertex, Voronoi } from './_tools/voronoi';
+import { Cell, Vertex, Voronoi } from './_tools/voronoi';
 import { PseudoRandomMachine } from './_tools/pseudo-random-machine';
 
 export class WorldBuilder {
@@ -380,19 +380,28 @@ export class WorldBuilder {
     });
   }
 
-  private getGaussian(d: number, w: number, a = 0.5, b = 8): number {
-    let n = Math.trunc(b*w);
-    if (n % 2 !== 0) n += 1;
-    return a * Math.exp(-d * Math.exp(1) / w) ** n;
-  }
-
-  public async RenderVoronoi(points: { peaks: WorldInfo[], valleys: WorldInfo[] }, width: number = 1000, height: number = 500): Promise<{ [id: string]: string; }> {
+  public async RenderVoronoi(points: { peaks: WorldInfo[], valleys: WorldInfo[] }, width: number = 1000, height: number = 500, circular = false): Promise<{ [id: string]: string; }> {
     const sites: Vertex[] = points.peaks.map(p => Converter.ToMercator(p.coordinate, width, height)).map(p => new Vertex(p.X, p.Y));
-    sites.push(...points.valleys.map(p => Converter.ToMercator(p.coordinate, width, height)).map(p => new Vertex(p.X, p.Y)))
+    sites.push(...points.valleys.map(p => Converter.ToMercator(p.coordinate, width, height)).map(p => new Vertex(p.X, p.Y)));
+    const copy_sites = [...sites];
+    if (circular) {
+      console.log('copy_sites', copy_sites.length);
+      sites.push(...(copy_sites.map(s => new Vertex(s.x, (s.y - height)))));
+      sites.push(...(copy_sites.map(s => new Vertex((s.x - width), s.y))));
+      sites.push(...(copy_sites.map(s => new Vertex(s.x, (s.y + height)))));
+      sites.push(...(copy_sites.map(s => new Vertex((s.x + width), s.y))));
+      console.log('sites', sites.length);
+    }
     const voronoi = new Voronoi();
     const result = voronoi.compute(sites, { xl: 0, xr: width, yt: 0, yb: height });
+    let reduced_cells: Cell[] = result.cells!;
     const cells: { [id: string]: Vector[] } = {};
-    result.cells?.forEach((cell, idx) => cells[`cell_${idx}`] = cell.halfedges.map((he) => new Vector(new Point(he.edge.va!.x, he.edge.va!.y, 1), new Point(he.edge.vb!.x, he.edge.vb!.y, 1))));
+    if (circular) {
+      console.log('cells', result.cells);
+      reduced_cells = reduced_cells.filter((cell) => copy_sites.some(s => cell.site.x === s.x && cell.site.y === s.y));
+      console.log('cells', reduced_cells);
+    }
+    reduced_cells.forEach((cell, idx) => cells[`cell_${idx}`] = cell.halfedges.map((he) => new Vector(new Point(he.edge.va!.x, he.edge.va!.y, 1), new Point(he.edge.vb!.x, he.edge.vb!.y, 1))));
     const layers: { [id: string]: string; } = {};
     Object.keys(cells).forEach((layername: string) => {
       layers[`cell_${layername}`] = Layer.Transform(cells[layername]).AsSvgPath();
