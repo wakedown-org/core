@@ -21,16 +21,3 @@ self.onmessage = async (eventData: any) => {
 
   self.postMessage(msg);
 };
-
-function handlePoints(...points: any[]) {
-  //console.log('handle', points);
-  return [...points];
-}
-
-function processPoint(point: { u: number, v: number }): { u: number, v: number, t: number } {
-  const t = 0;
-  return {
-    ...point,
-    t
-  };
-}

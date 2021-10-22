@@ -2,9 +2,11 @@ import { html, css, LitElement, svg } from 'lit';
 import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
 import { GeoJson } from './workers/_models/geojson';
+import versor from "versor";
 
 const d3 = await Promise.all([
   import("d3"),
+  import("d3-drag"),
   import("d3-delaunay"),
   import("d3-geo-voronoi")
 ]).then(d3 => Object.assign({}, ...d3));
@@ -42,7 +44,7 @@ export class WorldView extends LitElement {
     <animateTransform attributeName="transform" dur="1s" from="0 50 50" to="180 50 50" type="rotate" id="strokeBox" attributeType="XML" begin="rectBox.end"/>
   </rect>
   <rect x="27" y="27" fill="#000" width="46" height="50">
-    <animate attributeName="height" dur="10s" attributeType="XML" from="50" to="0" id="rectBox" fill="freeze" begin="0s;strokeBox.end"/>
+    <animate attributeName="height" dur="1s" attributeType="XML" from="50" to="0" id="rectBox" fill="freeze" begin="0s;strokeBox.end"/>
   </rect>
 </svg>`;
 
@@ -51,15 +53,11 @@ export class WorldView extends LitElement {
   @property({ type: String }) world = new Promise(resolve => {
     if (this._worker === null) {
       this._worker = new Worker('../dist/src/workers/worker.js', { type: 'module' });
-      console.log('valendo!', this._worker)
       this._worker.onmessage = (event: any) => {
-        console.log('onmessage', event);
-
         this.display(event.data.layers);
         resolve(svg``);
       }
-      const data = { seed: this.seed, width: this.width, height: this.height };
-      console.log('worker data', data);
+      const data = { seed: this.seed };
       this._worker.postMessage(data);
     }
   });
@@ -75,12 +73,11 @@ export class WorldView extends LitElement {
     </div>
     `;
   }
-  private projection = d3.geoOrthographic();
+  private projection = d3.geoEquirectangular()//d3.geoOrthographic();
   private path = d3.geoPath().projection(this.projection);
 
   display(layers: GeoJson) {
     var svg = d3.select(this.shadowRoot?.getElementById("map"));
-    console.log('svg', svg);
 
     svg.append('path')
       .attr('id', 'sphere')
@@ -90,7 +87,7 @@ export class WorldView extends LitElement {
     svg.append('g')
       .attr('class', 'polygons')
       .selectAll('path')
-      .data(layers)
+      .data(layers.features)
       .enter()
       .append('path')
       .attr('d', this.path)
@@ -102,18 +99,32 @@ export class WorldView extends LitElement {
         .map((d) => [+d[0], +d[1]])
     };
 
-    console.log('eita', c);
-
     svg.append('path')
       .attr('class', 'sites')
       .datum(c)
       .attr('d', this.path);
 
-    d3.interval((elapsed: number) => {
-      this.projection.rotate([elapsed / 150, 0]);
-      svg.selectAll('path')
-        .attr('d', this.path);
-    }, 50);
+    // d3.interval((elapsed: number) => {
+    //   this.projection.rotate([elapsed / 150, 0]);
+    //   svg.selectAll('path')
+    //     .attr('d', this.path);
+    // }, 50);
+// console.log('eita', d3.drag().on)
+//     // let v0: any, q0: any, r0: any;
+//     d3.select(svg).call(
+//       d3.drag()
+//         .on("start", (d: any) => {
+//           console.log('drag start', d);
+//           // v0 = versor.cartesian(this.projection.invert(d3.pointers(svg)));
+//           // r0 = this.projection.rotate();
+//           // q0 = versor(r0);
+//         })
+//         .on("drag", (d: any) => {
+//           console.log('drag drag', d);
+//           // var v1 = versor.cartesian(this.projection.rotate(r0).invert(d3.pointers(svg))),
+//           //   q1 = versor.multiply(q0, versor.delta(v0, v1)),
+//           //   r1 = versor.rotation(q1);
+//           // this.projection.rotate(r1);
+//         }))
   }
 }
-
