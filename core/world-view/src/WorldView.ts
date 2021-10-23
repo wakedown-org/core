@@ -1,8 +1,9 @@
 import { html, css, LitElement, svg } from 'lit';
 import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
-import { GeoJson } from './workers/_models/geojson';
+import { GeoJson, GeoJsonMultiPoint } from './workers/_models/geojson';
 import versor from "versor";
+// http://entropicparticles.com/6-days-of-creation
 
 const d3 = await Promise.all([
   import("d3"),
@@ -34,6 +35,7 @@ export class WorldView extends LitElement {
   }
   `;
 
+  @property({ type: Boolean }) isFlat = false;
   @property({ type: Number }) seed = 8;
   @property({ type: Number }) width = 10;
   @property({ type: Number }) height = 5;
@@ -73,16 +75,17 @@ export class WorldView extends LitElement {
     </div>
     `;
   }
-  private projection = d3.geoEquirectangular()//d3.geoOrthographic();
-  private path = d3.geoPath().projection(this.projection);
 
   display(layers: GeoJson) {
-    var svg = d3.select(this.shadowRoot?.getElementById("map"));
+    const projection = this.isFlat ? d3.geoEquirectangular() : d3.geoOrthographic();
+    const path = d3.geoPath().projection(projection);
 
+    var svg = d3.select(this.shadowRoot?.getElementById("map"));
+    
     svg.append('path')
-      .attr('id', 'sphere')
-      .datum({ type: "Sphere" })
-      .attr('d', this.path);
+        .attr('id', 'sphere')
+        .datum({ type: "Sphere" })
+        .attr('d', path);
 
     svg.append('g')
       .attr('class', 'polygons')
@@ -90,41 +93,45 @@ export class WorldView extends LitElement {
       .data(layers.features)
       .enter()
       .append('path')
-      .attr('d', this.path)
+      .attr('d', path)
       .attr('fill', (_: any, i: number) => d3.schemeCategory10[i % 10]);
 
-    var c = {
-      type: "MultiPoint",
-      coordinates: layers.features.map(f => f.properties['site'])
-        .map((d) => [+d[0], +d[1]])
-    };
+    var c = new GeoJsonMultiPoint(layers.features.map(f => f.properties['site'])
+    .map((d) => {
+      const ret =  [+d[0], +d[1]];
+      console.log('ret', ret);
+      return ret;
+    }));
 
+    console.log('sites', c);
     svg.append('path')
       .attr('class', 'sites')
       .datum(c)
-      .attr('d', this.path);
+      .attr('d', path);
 
-    // d3.interval((elapsed: number) => {
-    //   this.projection.rotate([elapsed / 150, 0]);
-    //   svg.selectAll('path')
-    //     .attr('d', this.path);
-    // }, 50);
-// console.log('eita', d3.drag().on)
+    d3.interval((elapsed: number) => {
+      projection.rotate([elapsed / 150, 0]);
+      svg.selectAll('path')
+        .attr('d', path);
+    }, 50);
+
 //     // let v0: any, q0: any, r0: any;
-//     d3.select(svg).call(
-//       d3.drag()
-//         .on("start", (d: any) => {
-//           console.log('drag start', d);
-//           // v0 = versor.cartesian(this.projection.invert(d3.pointers(svg)));
-//           // r0 = this.projection.rotate();
-//           // q0 = versor(r0);
-//         })
-//         .on("drag", (d: any) => {
-//           console.log('drag drag', d);
-//           // var v1 = versor.cartesian(this.projection.rotate(r0).invert(d3.pointers(svg))),
-//           //   q1 = versor.multiply(q0, versor.delta(v0, v1)),
-//           //   r1 = versor.rotation(q1);
-//           // this.projection.rotate(r1);
-//         }))
+    svg.call(
+      d3.drag(svg)
+        .on("start", (d: any) => {
+          console.log('drag start', d);
+          // v0 = versor.cartesian(projection.invert(d3.pointers(svg)));
+          // r0 = projection.rotate();
+          // q0 = versor(r0);
+        })
+        .on("drag", (d: any) => {
+          const factor = [d.x, -d.y];
+          console.log('drag', factor)
+          //projection.rotate(factor)
+          // var v1 = versor.cartesian(projection.rotate(r0).invert(d3.pointers(svg))),
+          //   q1 = versor.multiply(q0, versor.delta(v0, v1)),
+          //   r1 = versor.rotation(q1);
+          // projection.rotate(r1);
+        }))
   }
 }

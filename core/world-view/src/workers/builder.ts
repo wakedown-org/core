@@ -34,31 +34,46 @@ export class Builder {
         console.log('voronoi', voronoi);
         resolve(voronoi);
 
-        // let count = 0;
-        // const us = d3.range(0, 2 * Math.PI, this.step);
-        // const vs = d3.range(-Math.PI / 2, Math.PI / 2, this.step).forEach();
+        // const array = [
+        //   [-10.943776516259296, -9.473774022356865],
+        //   [-48.039245448831984, 0.4010578846186669],
+        //   [-52.73260442582173, 7.644128695713696],
+        //   [-26.57444951201186, 56.684003908293],
+        //   [58.28252020867874, 16.711695557267547],
+        //   [44.02437380042392, -3.3832563839479723],
+        //   [-10.943776516259296, -9.473774022356865]
+        // ]
+        // const dentro = [-21.488611400127407, 38.123002499341965];
+        // const fora = [57.917682230472565, 128.84190693497658];
 
-        // let meshes: number[][] = [];
+        // console.log('dentro', array, dentro, this.inside(array, dentro))
+        // console.log('fora', fora, this.inside(array, fora))
 
-        // for (let ui = 0; ui < us.length; ui++) {
-        //   let u = us[ui];
+        let count = 0;
+        const us = d3.range(0, 2 * Math.PI, this.step);
+        const vs = d3.range(-Math.PI / 2, Math.PI / 2, this.step);
 
-        //   for (let vi = 0; vi < vs.length; vi++) {
-        //     let v = vs[vi];
+        let meshes: number[][] = [];
 
-        //     const param = [
-        //       [u, v],
-        //       [u + this.step, v],
-        //       [u + this.step, v + this.step],
-        //       [u, v + this.step]
-        //     ];
+        for (let ui = 0; ui < us.length; ui++) {
+          let u = us[ui];
 
-        //     count += param.length;
+          for (let vi = 0; vi < vs.length; vi++) {
+            let v = vs[vi];
 
-        //     meshes = this.handlePoints(meshes, param.map(p => this.processPoint(p, voronoi)));
-        //   }
-        // }
-        // console.log('meshes', meshes, count);
+            const param = [
+              [u, v],
+              [u + this.step, v],
+              [u + this.step, v + this.step],
+              [u, v + this.step]
+            ];
+
+            count += param.length;
+
+            meshes = this.handlePoints(meshes, param.map(p => this.processPoint(p, voronoi)));
+          }
+        }
+        console.log('meshes', meshes, count);
       }
       catch (error) {
         console.log('render failed', error);
@@ -69,12 +84,12 @@ export class Builder {
 
   private inside(polygon: number[][], point: number[]): boolean {
     let inside = d3P.polygonContains(polygon.map(p => [p[0], p[1]]), [point[0], point[1]]);
-    // if (inside) console.log('ahooy!')
+    if (inside) console.log('ahooy!')
     return inside;
   }
 
   private getGaussian(d: number, w: number, a = 0.5, b = 2): number {
-    let n = Math.trunc(b * w);
+    let n = Math.trunc(2 * b * w);
     if (n % 2 !== 0) n += 1;
     return a * Math.exp(-d * Math.exp(1) / w) ** n;
   }
@@ -84,10 +99,12 @@ export class Builder {
       const feature = voronoi.features[index];
       const polygon = (feature.geometry.coordinates as number[][][])[0];
       const site = feature.properties.site as unknown as number[];
+      //if (index % 1000 === 0) console.log('polygon', polygon, point)
       if (this.inside(polygon, point)) {
         return { site, polygon };
       }
     }
+    //console.log('opa')
     return null;
   }
 
