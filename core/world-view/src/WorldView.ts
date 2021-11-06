@@ -35,7 +35,7 @@ export class WorldView extends LitElement {
   }
   `;
 
-  @property({ type: Boolean }) isFlat = false;
+  @property({ type: Boolean }) isFlat = true;
   @property({ type: Number }) seed = 8;
   @property({ type: Number }) width = 10;
   @property({ type: Number }) height = 5;
@@ -56,7 +56,7 @@ export class WorldView extends LitElement {
     if (this._worker === null) {
       this._worker = new Worker('../dist/src/workers/worker.js', { type: 'module' });
       this._worker.onmessage = (event: any) => {
-        this.display(event.data.layers);
+        this.display(event.data.layers, event.data.rejected);
         resolve(svg``);
       }
       const data = { seed: this.seed };
@@ -76,7 +76,7 @@ export class WorldView extends LitElement {
     `;
   }
 
-  display(layers: GeoJson) {
+  display(layers: GeoJson, rejected: number[][] = [], showSite = true) {
     const projection = this.isFlat ? d3.geoEquirectangular() : d3.geoOrthographic();
     const path = d3.geoPath().projection(projection);
 
@@ -96,42 +96,36 @@ export class WorldView extends LitElement {
       .attr('d', path)
       .attr('fill', (_: any, i: number) => d3.schemeCategory10[i % 10]);
 
-    var c = new GeoJsonMultiPoint(layers.features.map(f => f.properties['site'])
-    .map((d) => {
-      const ret =  [+d[0], +d[1]];
-      console.log('ret', ret);
-      return ret;
-    }));
-
-    console.log('sites', c);
+    svg.append('path')
+    //   .attr('class', 'sites')
+    //   .datum()
+    //   .attr('d', path);
+    
     svg.append('path')
       .attr('class', 'sites')
-      .datum(c)
+      .datum(showSite ? new GeoJsonMultiPoint(layers.features.map(f => f.properties['site']).map((d) => [+d[0], +d[1]])) : new GeoJsonMultiPoint(rejected))
       .attr('d', path);
 
-    d3.interval((elapsed: number) => {
-      projection.rotate([elapsed / 150, 0]);
-      svg.selectAll('path')
-        .attr('d', path);
-    }, 50);
+    // d3.interval((elapsed: number) => {
+    //   projection.rotate([elapsed / 150, 0]);
+    //   svg.selectAll('path')
+    //     .attr('d', path);
+    // }, 50);
 
-//     // let v0: any, q0: any, r0: any;
+    let v0: any, q0: any, r0: any;
     svg.call(
       d3.drag(svg)
         .on("start", (d: any) => {
-          console.log('drag start', d);
-          // v0 = versor.cartesian(projection.invert(d3.pointers(svg)));
-          // r0 = projection.rotate();
-          // q0 = versor(r0);
+          v0 = versor.cartesian(projection.invert([d.x, d.y]));
+          r0 = projection.rotate();
+          q0 = versor(r0);
         })
         .on("drag", (d: any) => {
-          const factor = [d.x, -d.y];
-          console.log('drag', factor)
-          //projection.rotate(factor)
-          // var v1 = versor.cartesian(projection.rotate(r0).invert(d3.pointers(svg))),
-          //   q1 = versor.multiply(q0, versor.delta(v0, v1)),
-          //   r1 = versor.rotation(q1);
-          // projection.rotate(r1);
+          var v1 = versor.cartesian(projection.rotate(r0).invert([d.x, d.y])),
+            q1 = versor.multiply(q0, versor.delta(v0, v1)),
+            r1 = versor.rotation(q1);
+          projection.rotate(r1);
+          svg.selectAll('path').attr('d', path);
         }))
   }
 }

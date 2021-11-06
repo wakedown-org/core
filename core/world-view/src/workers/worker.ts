@@ -16,7 +16,8 @@ self.onmessage = async (eventData: any) => {
     layers = await builder.render(18);
 
   const msg = {
-    layers: layers
+    layers: layers,
+    rejected: builder.rejected
   }
 
   self.postMessage(msg);

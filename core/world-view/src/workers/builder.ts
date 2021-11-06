@@ -14,6 +14,7 @@ import * as d3P from 'd3-polygon';
 export class Builder {
   private pseudo: PseudoRandom;
   private step = Math.PI / 30;
+  public rejected: number[][] = [];
 
   constructor(public seed: number) {
     this.pseudo = new PseudoRandom(seed);
@@ -54,6 +55,7 @@ export class Builder {
         const vs = d3.range(-Math.PI / 2, Math.PI / 2, this.step);
 
         let meshes: number[][] = [];
+        this.rejected = [];
 
         for (let ui = 0; ui < us.length; ui++) {
           let u = us[ui];
@@ -73,7 +75,7 @@ export class Builder {
             meshes = this.handlePoints(meshes, param.map(p => this.processPoint(p, voronoi)));
           }
         }
-        console.log('meshes', meshes, count);
+        // console.log('meshes', meshes, count, this.rejected);
       }
       catch (error) {
         console.log('render failed', error);
@@ -104,8 +106,8 @@ export class Builder {
         return { site, polygon };
       }
     }
-    //console.log('opa')
-    return null;
+    this.rejected.push(point);
+    return { site: point, polygon: [] };
   }
 
   private toDegrees(angle: number): number {
@@ -117,15 +119,20 @@ export class Builder {
     const polygon = this.findPolygon(point, voronoi);
     const perlin = Perlin.Noise(point);
     if (polygon !== null) {
-      const distance = this.findHypotenuse(Math.abs(point[0]) - Math.abs(polygon.site[0]), Math.abs(point[1]) - Math.abs(polygon.site[1]));
-      const gauss = this.getGaussian(distance, 42 * this.pseudo.random);
-      const t = this.truncate(gauss + perlin);
-      return [
-        ...point,
-        t
-      ];
+      if (polygon.polygon !== []) {
+        const distance = this.findHypotenuse(Math.abs(point[0]) - Math.abs(polygon.site[0]), Math.abs(point[1]) - Math.abs(polygon.site[1]));
+        const gauss = this.getGaussian(distance, 42 * this.pseudo.random);
+        const t = this.truncate(gauss + perlin);
+        return [
+          ...point,
+          t
+        ];
+      } else {
+        // problematic point
+        return point;
+      }
     } else
-      return [...point, this.truncate(this.getGaussian(4 * this.pseudo.random, 2 * this.pseudo.random) + perlin)]
+      return [...point, this.truncate(this.getGaussian(4 * this.pseudo.random, 2 * this.pseudo.random) + perlin)];
   }
 
   private handlePoints(result: number[][], points: number[][]): number[][] {
