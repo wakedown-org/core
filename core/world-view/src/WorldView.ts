@@ -35,7 +35,7 @@ export class WorldView extends LitElement {
   }
   `;
 
-  @property({ type: Boolean }) isFlat = true;
+  @property({ type: Boolean }) isFlat = false;
   @property({ type: Number }) seed = 8;
   @property({ type: Number }) width = 10;
   @property({ type: Number }) height = 5;
@@ -76,7 +76,7 @@ export class WorldView extends LitElement {
     `;
   }
 
-  display(layers: GeoJson, rejected: number[][] = [], showSite = true) {
+  display(layers: GeoJson, rejected: number[][] = [], showSite = false) {
     const projection = this.isFlat ? d3.geoEquirectangular() : d3.geoOrthographic();
     const path = d3.geoPath().projection(projection);
 
@@ -96,7 +96,7 @@ export class WorldView extends LitElement {
       .attr('d', path)
       .attr('fill', (_: any, i: number) => d3.schemeCategory10[i % 10]);
 
-    svg.append('path')
+    //svg.append('path')
     //   .attr('class', 'sites')
     //   .datum()
     //   .attr('d', path);

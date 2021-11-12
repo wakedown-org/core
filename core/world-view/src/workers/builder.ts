@@ -13,7 +13,8 @@ import * as d3P from 'd3-polygon';
 
 export class Builder {
   private pseudo: PseudoRandom;
-  private step = Math.PI / 30;
+  private step = this.truncate(Math.PI / 30);
+  public insidePointsCount = 0;
   public rejected: number[][] = [];
 
   constructor(public seed: number) {
@@ -51,8 +52,10 @@ export class Builder {
         // console.log('fora', fora, this.inside(array, fora))
 
         let count = 0;
-        const us = d3.range(0, 2 * Math.PI, this.step);
-        const vs = d3.range(-Math.PI / 2, Math.PI / 2, this.step);
+        const us = d3.range(this.truncate(-Math.PI), this.truncate(Math.PI), this.step);
+        const vs = d3.range(this.truncate(-Math.PI / 2), this.truncate(Math.PI / 2), this.step);
+
+        // console.log('elaia', this.step, us, vs);
 
         let meshes: number[][] = [];
         this.rejected = [];
@@ -65,9 +68,9 @@ export class Builder {
 
             const param = [
               [u, v],
-              [u + this.step, v],
-              [u + this.step, v + this.step],
-              [u, v + this.step]
+              [this.truncate(u + this.step), v],
+              [this.truncate(u + this.step), this.truncate(v + this.step)],
+              [u, this.truncate(v + this.step)]
             ];
 
             count += param.length;
@@ -75,7 +78,15 @@ export class Builder {
             meshes = this.handlePoints(meshes, param.map(p => this.processPoint(p, voronoi)));
           }
         }
-        // console.log('meshes', meshes, count, this.rejected);
+        console.log('meshes', meshes.length, count, this.insidePointsCount, this.rejected.length, this.insidePointsCount + this.rejected.length);
+        let found = 0;
+        for (let idx = 0; idx < this.rejected.length; idx++) {
+          const point = this.rejected[idx];
+          const poly = this.findPolygonAux(point, voronoi);
+          if (poly.length > 0)
+            found++;
+        }
+        console.log('found', found, this.rejected.length);
       }
       catch (error) {
         console.log('render failed', error);
@@ -84,9 +95,21 @@ export class Builder {
     });
   }
 
+  private findPolygonAux(point: number[], voronoi: GeoJson): number[][] {
+    for (let index = 0; index < voronoi.features.length; index++) {
+      const polygon = (voronoi.features[index].geometry.coordinates as number[][][])[0];
+      if (d3P.polygonContains(polygon.map(p => [p[0], p[1]]), [point[0], point[1]])) {
+        return polygon;
+      }
+    }
+    return [];
+  }
+
   private inside(polygon: number[][], point: number[]): boolean {
     let inside = d3P.polygonContains(polygon.map(p => [p[0], p[1]]), [point[0], point[1]]);
-    if (inside) console.log('ahooy!')
+    if (inside) {
+      this.insidePointsCount++;
+    }
     return inside;
   }
 
@@ -144,7 +167,7 @@ export class Builder {
   }
 
   private findHypotenuse(cathetiA: number, cathetiB: number, cathetiC: number = 0): number {
-    return Math.sqrt(cathetiA ** 2 + cathetiB ** 2 + cathetiC ** 2);
+    return this.truncate(Math.sqrt(cathetiA ** 2 + cathetiB ** 2 + cathetiC ** 2));
   }
 
   private addInIfInvertNotExistsAndRemoveItFrom(vectors: number[][], vector: number[]): number[][] {
