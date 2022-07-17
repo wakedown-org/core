@@ -1,8 +1,13 @@
 import versor from "versor";
 
-export function dragMap(d3: any, svg: SVGElement, projection: any) {
-  let v0: any, q0: any, r0: any, a0: any, l: any;
+export class moveMap {
+  private v0: any;
+  private q0: any;
+  private r0: any;
 
+  constructor (private projection: any) {
+
+  }
   // function pointer(event, that) {
   //   const t = d3.pointers(event, that);
 
@@ -48,20 +53,39 @@ export function dragMap(d3: any, svg: SVGElement, projection: any) {
   //   if (delta[0] < 0.7) dragstarted.apply(this, [event, this]);
   // }
 
-  function dragstarted() {
-    v0 = versor.cartesian(projection.invert(d3.pointers(svg)));
-    r0 = projection.rotate();
-    q0 = versor(r0);
+  public static _origin(): number[] {
+    return [0, 0];
   }
 
-  function dragged() {
-    var v1 = versor.cartesian(projection.rotate(r0).invert(d3.pointers(svg))),
-        q1 = versor.multiply(q0, versor.delta(v0, v1)),
-        r1 = versor.rotation(q1);
-    projection.rotate(r1);
+  public static _center(width: number, height: number): number[] {
+    return [
+      this.truncateInt(width/2),
+      this.truncateInt(height/2)
+    ];
   }
 
-  return d3.drag()
-      .on("start", dragstarted)
-      .on("drag", dragged);
+  public dragstarted(point: any[]) {
+    this.v0 = versor.cartesian(this.projection.invert(point));
+    this.r0 = this.projection.rotate();
+    this.q0 = versor(this.r0);
+  }
+
+  public dragged(point: any[]) {
+    var v1 = versor.cartesian(this.projection.rotate(this.r0).invert(point)),
+      q1 = versor.multiply(this.q0, versor.delta(this.v0, v1)),
+      r1 = versor.rotation(q1);
+    this.projection.rotate(r1);
+  }
+
+  public zoom(factor: number) {
+    this.projection.scale(10 ** (factor));
+  }
+
+  public showLoc(point: any[]) {
+    return this.projection.invert(point);
+  }
+
+  public static truncateInt(number: number): number {
+    return Math.trunc(number);
+  }
 }

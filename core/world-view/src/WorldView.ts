@@ -3,13 +3,15 @@ import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
 import { GeoJson, GeoJsonMultiPoint } from './workers/_models/geojson';
 import versor from "versor";
+import { moveMap } from './_tools/move-map';
 // http://entropicparticles.com/6-days-of-creation
 
 const d3 = await Promise.all([
   import("d3"),
   import("d3-drag"),
   import("d3-delaunay"),
-  import("d3-geo-voronoi")
+  import("d3-geo-voronoi"),
+  import("d3-zoom")
 ]).then(d3 => Object.assign({}, ...d3));
 
 export class WorldView extends LitElement {
@@ -51,6 +53,7 @@ export class WorldView extends LitElement {
 </svg>`;
 
   private _worker: Worker | null = null;
+  private _moveMap: moveMap | null = null;
 
   @property({ type: String }) world = new Promise(resolve => {
     if (this._worker === null) {
@@ -76,11 +79,16 @@ export class WorldView extends LitElement {
     `;
   }
 
-  display(layers: GeoJson, rejected: number[][] = [], showSite = false) {
-    const projection = this.isFlat ? d3.geoEquirectangular() : d3.geoOrthographic();
+  display(layers: GeoJson, rejected: number[][] = [], showSite = false, scale = 2.2, center: number[] | null = null) {
+    if (center === null) center = moveMap._origin();
+    const projection = (this.isFlat ? 
+      d3.geoEquirectangular() : 
+      d3.geoOrthographic()).scale(10**scale).center(center);
+
     const path = d3.geoPath().projection(projection);
 
     var svg = d3.select(this.shadowRoot?.getElementById("map"));
+    this._moveMap = new moveMap(projection);
     
     svg.append('path')
         .attr('id', 'sphere')
@@ -96,14 +104,16 @@ export class WorldView extends LitElement {
       .attr('d', path)
       .attr('fill', (_: any, i: number) => d3.schemeCategory10[i % 10]);
 
-    //svg.append('path')
+    // svg.append('path')
     //   .attr('class', 'sites')
     //   .datum()
     //   .attr('d', path);
     
     svg.append('path')
       .attr('class', 'sites')
-      .datum(showSite ? new GeoJsonMultiPoint(layers.features.map(f => f.properties['site']).map((d) => [+d[0], +d[1]])) : new GeoJsonMultiPoint(rejected))
+      .datum(showSite ? 
+        new GeoJsonMultiPoint(layers.features.map(f => f.properties['site']).map((d) => [+d[0], +d[1]])) : 
+        new GeoJsonMultiPoint([center]))
       .attr('d', path);
 
     // d3.interval((elapsed: number) => {
@@ -112,20 +122,28 @@ export class WorldView extends LitElement {
     //     .attr('d', path);
     // }, 50);
 
-    let v0: any, q0: any, r0: any;
     svg.call(
       d3.drag(svg)
         .on("start", (d: any) => {
-          v0 = versor.cartesian(projection.invert([d.x, d.y]));
-          r0 = projection.rotate();
-          q0 = versor(r0);
+          this._moveMap?.dragstarted([d.x, d.y]);
         })
         .on("drag", (d: any) => {
-          var v1 = versor.cartesian(projection.rotate(r0).invert([d.x, d.y])),
-            q1 = versor.multiply(q0, versor.delta(v0, v1)),
-            r1 = versor.rotation(q1);
-          projection.rotate(r1);
+          this._moveMap?.dragged([d.x, d.y]);
           svg.selectAll('path').attr('d', path);
-        }))
+        }));
+    svg.call(
+      d3.zoom().on("zoom", (d: any) => {
+        this._moveMap?.zoom(scale * d.transform.k);
+        svg.selectAll('path').attr('d', path);
+      })
+    )
+    svg.on("click", (d: any) => {
+      this._moveMap?.dragstarted([d.x, d.y]);
+      this._moveMap?.dragged(moveMap._center(this.width, this.height));
+      
+      svg.selectAll('path').attr('d', path);
+    })
+
+    
   }
 }

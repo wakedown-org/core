@@ -2,15 +2,15 @@
 <html lang="en-GB">
 <head>
   <meta charset="utf-8">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
   <style>
-    html, body {
-      background: #fafafa;
+    * {
       margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-
-    world-view {
-      width: 100vw;
-      height: 100vh;
+    body {
+      font-family: 'Roboto', sans-serif;
     }
   </style>
 </head>
@@ -19,14 +19,14 @@
 
   <script type="module">
     import { html, render } from 'lit';
-    import '../dist/src/world-view.js';
+    import '../dist/src/media-viewer.js';
 
     const title = 'Hello owc World!';
     render(
       html`
-        <world-view .title=${title}>
+        <media-viewer .title=${title}>
           some light-dom
-        </world-view>
+        </media-viewer>
       `,
       document.querySelector('#demo')
     );
