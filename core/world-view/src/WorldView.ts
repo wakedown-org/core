@@ -1,7 +1,7 @@
 import { html, css, LitElement, svg } from 'lit';
 import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
-import { GeoJson, GeoJsonMultiPoint } from './workers/_models/geojson';
+import { GeoJson, GeoJsonFeature, GeoJsonMultiPoint } from './workers/_models/geojson';
 import versor from "versor";
 import { moveMap } from './_tools/move-map';
 // http://entropicparticles.com/6-days-of-creation
@@ -10,6 +10,7 @@ const d3 = await Promise.all([
   import("d3"),
   import("d3-drag"),
   import("d3-delaunay"),
+  import("d3-geo"),
   import("d3-geo-voronoi"),
   import("d3-zoom")
 ]).then(d3 => Object.assign({}, ...d3));
@@ -37,7 +38,7 @@ export class WorldView extends LitElement {
   }
   `;
 
-  @property({ type: Boolean }) isFlat = false;
+  @property({ type: Boolean }) isFlat = true;
   @property({ type: Number }) seed = 8;
   @property({ type: Number }) width = 10;
   @property({ type: Number }) height = 5;
@@ -54,6 +55,7 @@ export class WorldView extends LitElement {
 
   private _worker: Worker | null = null;
   private _moveMap: moveMap | null = null;
+  private _rotationPaused = true;
 
   @property({ type: String }) world = new Promise(resolve => {
     if (this._worker === null) {
@@ -79,7 +81,7 @@ export class WorldView extends LitElement {
     `;
   }
 
-  display(layers: GeoJson, rejected: number[][] = [], showSite = false, scale = 2.2, center: number[] | null = null) {
+  display(layers: GeoJson, rejected: number[][] = [], showSite = true, scale = 2.2, center: number[] | null = null) {
     if (center === null) center = moveMap._origin();
     const projection = (this.isFlat ? 
       d3.geoEquirectangular() : 
@@ -87,13 +89,15 @@ export class WorldView extends LitElement {
 
     const path = d3.geoPath().projection(projection);
 
+    const graticule = d3.geoGraticule().step([10,10]);
+
     var svg = d3.select(this.shadowRoot?.getElementById("map"));
     this._moveMap = new moveMap(projection);
     
-    svg.append('path')
-        .attr('id', 'sphere')
-        .datum({ type: "Sphere" })
-        .attr('d', path);
+    // svg.append('path')
+    //     .attr('id', 'sphere')
+    //     .datum({ type: "Sphere" })
+    //     .attr('d', path);
 
     svg.append('g')
       .attr('class', 'polygons')
@@ -102,7 +106,10 @@ export class WorldView extends LitElement {
       .enter()
       .append('path')
       .attr('d', path)
-      .attr('fill', (_: any, i: number) => d3.schemeCategory10[i % 10]);
+      .attr('fill', (feature: GeoJsonFeature, i: number) => {
+        const found = feature.properties.sitefound == 'true';
+        return found ? d3.schemeCategory10[i % 10] : null;
+      });
 
     // svg.append('path')
     //   .attr('class', 'sites')
@@ -116,21 +123,31 @@ export class WorldView extends LitElement {
         new GeoJsonMultiPoint([center]))
       .attr('d', path);
 
-    // d3.interval((elapsed: number) => {
-    //   projection.rotate([elapsed / 150, 0]);
-    //   svg.selectAll('path')
-    //     .attr('d', path);
-    // }, 50);
+    svg.append('path')
+      .datum(graticule)
+      .attr('class', 'graticule')
+      .attr('d', path);
+
+    d3.interval((elapsed: number) => {
+      if (!this._rotationPaused) {
+        projection.rotate([elapsed / 150 % 360, 0]);
+        svg.selectAll('path').attr('d', path);
+      }
+    }, 50);
 
     svg.call(
       d3.drag(svg)
         .on("start", (d: any) => {
+          this._rotationPaused = true;
           this._moveMap?.dragstarted([d.x, d.y]);
         })
         .on("drag", (d: any) => {
           this._moveMap?.dragged([d.x, d.y]);
           svg.selectAll('path').attr('d', path);
-        }));
+        })).
+        on("end", (d: any) => {
+          this._rotationPaused = false;
+        });
     svg.call(
       d3.zoom().on("zoom", (d: any) => {
         this._moveMap?.zoom(scale * d.transform.k);
@@ -138,10 +155,12 @@ export class WorldView extends LitElement {
       })
     )
     svg.on("click", (d: any) => {
-      this._moveMap?.dragstarted([d.x, d.y]);
-      this._moveMap?.dragged(moveMap._center(this.width, this.height));
+      console.log('click', [d.x, d.y], projection.invert([d.x, d.y]))
+      // this._moveMap?.dragstarted([d.x, d.y]);
+      // this._moveMap?.dragged(moveMap._center(this.width, this.height));
       
-      svg.selectAll('path').attr('d', path);
+      // svg.selectAll('path').attr('d', path);
+      // this._rotationPaused = false;
     })
 
     

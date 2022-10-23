@@ -18,14 +18,14 @@ self.onmessage = async (eventData: any) => {
   if (layers === undefined)
     layers = await world.getLayers(eventData.data.width ?? 1000, eventData.data.height ?? 500);
 
-  if (sites === undefined) {
-    const peaksValleys = await world.GetPeaksAndValleys(eventData.data.width ?? 1000, eventData.data.height ?? 500);
-    voronoi = await world.RenderVoronoi(peaksValleys, eventData.data.width ?? 1000, eventData.data.height ?? 500);
-    sites = {
-      peaks: peaksValleys.peaks.map((pe) => Converter.ToMercator(pe.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500)),
-      valleys: peaksValleys.valleys.map((va) => Converter.ToMercator(va.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500))
-    };
-  }
+  // if (sites === undefined) {
+  //   const peaksValleys = await world.GetPeaksAndValleys(eventData.data.width ?? 1000, eventData.data.height ?? 500);
+  //   voronoi = await world.RenderVoronoi(peaksValleys, eventData.data.width ?? 1000, eventData.data.height ?? 500);
+  //   sites = {
+  //     peaks: peaksValleys.peaks.map((pe) => Converter.ToMercator(pe.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500)),
+  //     valleys: peaksValleys.valleys.map((va) => Converter.ToMercator(va.coordinate, eventData.data.width ?? 1000, eventData.data.height ?? 500))
+  //   };
+  // }
 
   const msg = {
     layers: layers,
