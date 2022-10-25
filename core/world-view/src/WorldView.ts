@@ -89,15 +89,8 @@ export class WorldView extends LitElement {
 
     const path = d3.geoPath().projection(projection);
 
-    const graticule = d3.geoGraticule().step([10,10]);
-
     var svg = d3.select(this.shadowRoot?.getElementById("map"));
     this._moveMap = new moveMap(projection);
-    
-    // svg.append('path')
-    //     .attr('id', 'sphere')
-    //     .datum({ type: "Sphere" })
-    //     .attr('d', path);
 
     svg.append('g')
       .attr('class', 'polygons')
@@ -106,26 +99,13 @@ export class WorldView extends LitElement {
       .enter()
       .append('path')
       .attr('d', path)
-      .attr('fill', (feature: GeoJsonFeature, i: number) => {
-        const found = feature.properties.sitefound == 'true';
-        return found ? d3.schemeCategory10[i % 10] : null;
-      });
-
-    // svg.append('path')
-    //   .attr('class', 'sites')
-    //   .datum()
-    //   .attr('d', path);
+      .attr('fill', (feature: GeoJsonFeature, i: number) => d3.schemeCategory10[i % 10]);
     
     svg.append('path')
       .attr('class', 'sites')
       .datum(showSite ? 
         new GeoJsonMultiPoint(layers.features.map(f => f.properties['site']).map((d) => [+d[0], +d[1]])) : 
         new GeoJsonMultiPoint([center]))
-      .attr('d', path);
-
-    svg.append('path')
-      .datum(graticule)
-      .attr('class', 'graticule')
       .attr('d', path);
 
     d3.interval((elapsed: number) => {

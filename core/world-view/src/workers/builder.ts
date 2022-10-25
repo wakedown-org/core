@@ -8,7 +8,7 @@ import polyInside from '../_tools/inside';
 
 // const d3 = await Promise.all([
 //   import("d3"),
-//   import("d3-polygon"),
+//   import("d3-geo"),
 //   import("d3-geo-voronoi")
 // ]).then(d3 => Object.assign({}, ...d3));
 
@@ -37,7 +37,6 @@ export class Builder {
           .y((p: number[]) => +p[1])
           (points).polygons();
 
-        console.log('voronoi', voronoi, points);
         resolve(voronoi);
 
         this.checkVoronoi(voronoi);
@@ -50,73 +49,16 @@ export class Builder {
   }
 
   private checkVoronoi(voronoi: GeoJson): void {
-    voronoi.features.forEach(element => {
-      const polygon = element.geometry.coordinates as number[][][];
+    voronoi.features.forEach((element, idx) => {
+      voronoi.features.forEach((element2, idx2) => {
+        const polygon: any = element;
+        const site: any = element2.properties.sitecoordinates;
 
+        const inside = d3.geoContains(polygon, site);
 
-      const site = element.properties.sitecoordinates as unknown as number[];
-      const inside = this.inside(polygon, site);
-      element.properties['sitefound'] = inside.toString();
-
-      console.log('check site', site, polygon, inside);
+        console.log('check site', idx, idx2, inside);
+      });
     });
-  }
-
-  public inside(polygon: number[][][], point: number[]): boolean {
-    const norm_polygon: [number,number][] = polygon[0].map(p => [p[0], p[1]]);
-    const norm_point: [number,number] = [point[0], point[1]];
-
-    let inside = polyInside(norm_polygon, norm_point);
-
-    if (!inside) {
-      let idx = this.findLimitTranspessing(norm_polygon);
-      while (idx > -1) {
-        let val = norm_polygon[idx][0];
-        console.log('checking', val, norm_polygon[idx])
-        if (val > 0) {
-          val = -180 + (-180 + val);
-        } else {
-          val = 180 + 180 + val;
-        }
-
-        norm_polygon[idx][0] = val;
-
-        idx = this.findLimitTranspessing(norm_polygon);
-      }
-
-//       // idx = this.findLimitTranspessing(norm_polygon, 1);
-//       // while (idx > -1) {
-//       //   let val = norm_polygon[idx][1];
-
-//       // if (val > 0) {
-//       //   val = -90 + (-90 + val);
-//       // } else {
-//       //   val = 90 + 90 + val;
-//       // }
-
-//       //   norm_polygon[idx][0] = val;
-
-//       //   idx = this.findLimitTranspessing(norm_polygon, 1);
-//       // }
-
-      console.log('checked', norm_polygon);
-
-      inside = polyInside(norm_polygon, norm_point);
-    }
-    // TODO se for falso, verificar se as coordenadas do poligono ultrapassando o limite de -90/90 para latitude e/ou -180/180 para longitude, e se fizer extrapolar para um dos lados e recalcular se está dentro
-    
-    return inside;
-  }
-
-  private findLimitTranspessing(polygon: [number,number][], arrayPos = 0): number {
-    let before = polygon[0][arrayPos] > 0;
-    for (let idx = 1; idx < polygon.length; idx++) {
-      const now = polygon[idx][arrayPos] > 0;
-      if (before !== now)
-        return idx;
-    }
-
-    return -1;
   }
 
   // private getGaussian(d: number, w: number, a = 0.2, b = 8): number {
