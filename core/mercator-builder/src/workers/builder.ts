@@ -250,14 +250,42 @@ class WorldInfo {
     points[itemPoint.X].splice(itemPoint.Y, 1);
   }
 
-  public static GetAllNear(points: WorldInfo[], point: Point, width: number, height: number): WorldInfo[] {
-    const variator = 2;
-    return points.filter((p: WorldInfo) => {
-      const itemPoint = Converter.ToMercator(p.coordinate, width, height);
-      return (itemPoint.X >= point.X - variator && itemPoint.X <= point.X + variator) &&
-        (itemPoint.Y >= point.Y - variator && itemPoint.Y <= point.Y + variator) &&
-        (itemPoint.Z >= point.Z - variator && itemPoint.Z <= point.Z + variator);
-    });
+  
+}
+
+class Progress {
+  private progress: number;
+  public step: number = 0;
+  private ini: Date = new Date();
+  private lastCheck: number = 0;
+  constructor(private context:string, private total: number, autoStart = false, stepDiv = 10) {
+    this.total = total;
+    this.step = this.total / stepDiv;
+    this.progress = 0;
+    if (autoStart) this.start();
+  }
+
+  start() {
+    this.ini = new Date();
+    this.lastCheck = 0;
+    console.log(`[${this.context}] start ${this.total}`, this.ini);
+  }
+
+  stop() {
+    const end = new Date();
+    console.log(`[${this.context}] duration ${Helper.TruncDecimals(end.getTime() / 1000 - this.ini.getTime() / 1000, 3)}s ${end}`);
+  }
+
+  check() {
+    this.progress++;
+    if (this.progress % this.step === 0) {
+      const partial = new Date();
+      if (this.ini !== null) {
+      const check = Helper.TruncDecimals(partial.getTime() / 1000 - this.ini.getTime() / 1000, 3);
+      console.log(`[${this.context}] ${Math.round((this.progress * 100) / this.total)}% partial-duration: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s ${check}s`);
+      this.lastCheck = check;
+      }
+    }
   }
 }
 
@@ -388,10 +416,13 @@ export class WorldBuilder {
   }
 
   public getLayers(width: number, height: number): Promise<{ [id: string]: string; }> {
+    const progress = new Progress('getLayers', width * height);
     return new Promise<{ [id: string]: string; }>(resolve => {
+      progress.start();
       const allLayers: { [id: string]: Vector[]; } = {};
       for (let x = 0; x < width - 1; x++) {
         for (let y = 0; y < height - 1; y++) {
+          progress.check();
           const no = new Point(x, y, 0);
           const noInfo = this.GetInformation(Converter.FromMercator(no, width, height));
           const ne = new Point((1 + x), y, 0);
@@ -422,6 +453,7 @@ export class WorldBuilder {
         layers[layerName] = Layer.Transform(allLayers[layerName]).AsSvgPath();
       });
       resolve(layers);
+      progress.stop();
     });
   }
 
