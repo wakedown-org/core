@@ -1,13 +1,13 @@
 class Layer {
-  constructor(public limit: Vector[] = [], public innerLayers: Layer[] = []) { }
+  constructor(public limit: Line[] = [], public innerLayers: Layer[] = []) { }
 
   public shrunk(): Layer {
     const layer = [...this.limit];
     const array = [];
-    let runner: Vector = layer[0].copy;
+    let runner: Line = layer[0].copy;
     for (let i = 1; i < layer.length; i++) {
       if (runner.isCollinear(layer[i].end)) {
-        runner = new Vector(runner.start, layer[i].end);
+        runner = new Line(runner.start, layer[i].end);
       } else {
         array.push(runner.copy);
         runner = layer[i].copy;
@@ -53,11 +53,11 @@ class Layer {
     return path;
   }
 
-  public static Transform(allVectors: Vector[]): Layer {
+  public static Transform(allVectors: Line[]): Layer {
     const copyVectors = [ ...allVectors ];
     const closedCircuits: Layer[] = [];
       while (copyVectors.length > 0) {
-        const vectors: Vector[] = [];
+        const vectors: Line[] = [];
         const startVector = copyVectors.pop()!;
         vectors.push(startVector.copy);
         let runner = startVector.copy;
@@ -70,7 +70,7 @@ class Layer {
           }
           runner = copyVectors.splice(vectorIdx, 1)[0].copy;
           if (isInverted) { 
-            runner = new Vector(runner.end, runner.start);
+            runner = new Line(runner.end, runner.start);
           }
           vectors.push(runner.copy);
         }
@@ -104,7 +104,7 @@ class Layer {
 }
 
 class Point {
-  constructor(public X: number, public Y: number, public Z: number) { }
+  constructor(public X: number, public Y: number, public Z: number = 1) { }
 
   public equals(point: Point): boolean {
     return (this.X === point.X && this.Y === point.Y && this.Z === point.Z);
@@ -113,20 +113,56 @@ class Point {
   public copy(): Point {
     return new Point(this.X, this.Y, this.Y);
   }
+
+  public fromMercator(width: number, height: number): Point {
+    return new Point((this.Y * (180 / height)) - 90, (this.X * (360 / width)) - 180, this.Z || 1);
+  }
+
+  public toCardian(): Point {
+    return new Point(
+      this.Z * Math.cos(Helper.ToRadians(this.Y)) * Math.cos(Helper.ToRadians(this.X)),
+      this.Z * Math.sin(Helper.ToRadians(this.Y)) * Math.cos(Helper.ToRadians(this.X)),
+      this.Z * Math.sin(Helper.ToRadians(this.X)));
+  }
+
+  public toMercator(width: number, height: number): Point {
+    return new Point(Math.round((this.Y + 180) / (360 / width)), Math.round((this.X + 90) / (180 / height)), this.Z);
+  }
+
+  static square(point: Point): Line[] {
+    const a = new Point(point.X, point.Y, point.Z), 
+      b = new Point((1 + point.X), point.Y, point.Z), 
+      c = new Point(point.X, (1 + point.Y), point.Z), 
+      d = new Point((1 + point.X), (1 + point.Y), point.Z);
+    return [new Line(a, b), new Line(b, c), new Line(c, d), new Line(d, a)];
+  }
+
+  static getSquares(point: Point, getInformation: (p: Point) => WorldInfo, allLayers: { [id: string]: Line[]; }) {
+    const square = Point.square(point);
+    const biomes = square.map((line) => getInformation(line.start).Biome);
+    
+    if (biomes[0] === biomes[1] && biomes[1] === biomes[2] && biomes[2] === biomes[3]) {
+      square.forEach((line) => 
+        Line.AddInIfInvertNotExistsAndRemoveItFrom(line, allLayers[WorldBiome[biomes[0]]]));
+    } else {
+      square.forEach((line) => 
+        Line.AddInIfInvertNotExistsAndRemoveItFrom(line, allLayers[WorldInfo.maxCountBiome(biomes)]));
+    }
+  }
 }
 
-class Vector {
+class Line {
   constructor(public start: Point, public end: Point) { }
 
-  public get inverted(): Vector {
-    return new Vector(this.end, this.start);
+  public get inverted(): Line {
+    return new Line(this.end, this.start);
   }
 
-  public get copy(): Vector {
-    return new Vector(this.start, this.end);
+  public get copy(): Line {
+    return new Line(this.start, this.end);
   }
 
-  public containsIn(array: Vector[]): boolean {
+  public containsIn(array: Line[]): boolean {
     for (let i = 0; i < array.length; i++) {
       if ((array[i].start.equals(this.start)) && (array[i].end.equals(this.end))) {
         return true;
@@ -140,24 +176,23 @@ class Vector {
     return A === 0;
   }
 
-  public isClockwise(vector: Vector): boolean {
+  public isClockwise(vector: Line): boolean {
     const dot = (this.end.X - this.start.X)*(vector.end.X - vector.start.X) + (this.end.Y - this.start.Y)*(vector.end.Y - vector.start.Y);
     const det = (this.end.X - this.start.X)*(vector.end.Y - vector.start.Y) - (this.end.Y - this.start.Y)*(vector.end.X - vector.start.X);
     return Math.atan2(det, dot) > 0;
   }
 
-  public equals(vector: Vector): boolean {
+  public equals(vector: Line): boolean {
     return (this.start.equals(vector.start) && this.end.equals(vector.end));
   }
 
-  public static AddInIfInvertNotExistsAndRemoveItFrom(vectors: Vector[], vector: Vector): Vector[] {
+  public static AddInIfInvertNotExistsAndRemoveItFrom(vector: Line, vectors: Line[]) {
     const vectorIdx = vectors.findIndex((v) => vector.inverted.equals(v));
     if (vectorIdx > -1) {
       vectors.splice(vectorIdx, 1);
     } else {
       vectors.push(vector);
     }
-    return vectors;
   }
 }
 
@@ -165,36 +200,7 @@ class Helper {
   public static TruncDecimals(num: number, precision = 5): number {
     return Math.trunc(Math.pow(10, precision) * num) / Math.pow(10, precision);
   }
-}
 
-class Coordinate {
-  constructor(public latitude: number, public longitude: number, public radius: number = 1) { }
-
-  public addLatitude(value: number, precision = 5) {
-    return new Coordinate(Helper.TruncDecimals(this.latitude + value, precision), this.longitude);
-  }
-  public addLongitude(value: number, precision = 5) {
-    return new Coordinate(this.latitude, Helper.TruncDecimals(this.longitude + value, precision));
-  }
-
-  public isClose(a: Coordinate, margin = 42): boolean {
-    return (Math.abs(a.latitude - this.latitude) < margin && Math.abs(a.longitude - this.longitude) < margin);
-  }
-}
-
-class Converter {
-  public static FromMercator(point: Point, width: number, height: number): Coordinate {
-    return new Coordinate((point.Y * (180 / height)) - 90, (point.X * (360 / width)) - 180);
-  }
-  public static ToCardian(coordinate: Coordinate): Point {
-    return new Point(
-      coordinate.radius * Math.cos(Converter.ToRadians(coordinate.longitude)) * Math.cos(Converter.ToRadians(coordinate.latitude)),
-      coordinate.radius * Math.sin(Converter.ToRadians(coordinate.longitude)) * Math.cos(Converter.ToRadians(coordinate.latitude)),
-      coordinate.radius * Math.sin(Converter.ToRadians(coordinate.latitude)));
-  }
-  public static ToMercator(coordinate: Coordinate, width: number, height: number): Point {
-    return new Point(Math.round((coordinate.longitude + 180) / (360 / width)), Math.round((coordinate.latitude + 90) / (180 / height)), 0);
-  }
   public static ToDegrees(angle: number): number {
     return angle * (180 / Math.PI);
   }
@@ -204,7 +210,7 @@ class Converter {
 }
 
 class WorldInfo {
-  public constructor(public topology: number, public coordinate: Coordinate) { }
+  public constructor(public topology: number, public coordinate: Point) { }
 
   public get Biome(): WorldBiome {
     if (this.topology < 0.35) {
@@ -229,7 +235,7 @@ class WorldInfo {
       return WorldBiome.snow;
     }
     return WorldBiome.grass;
-  };
+  }
 
   public get Shoreline(): boolean {
     return this.topology === 0.50;
@@ -246,11 +252,44 @@ class WorldInfo {
   }
 
   public static RemoveOne(points: WorldInfo[][], item: WorldInfo, width: number, height: number): void {
-    const itemPoint = Converter.ToMercator(item.coordinate, width, height);
+    const itemPoint = item.coordinate.toMercator(width, height);
     points[itemPoint.X].splice(itemPoint.Y, 1);
   }
 
-  
+  public static maxCountBiome(biomes: WorldBiome[]): string {
+    const counter: { [id: string]: number } = {};
+    Object.keys(WorldBiome).forEach((biome) => counter[biome] = 0);
+    biomes.forEach((biome) => {
+      counter[WorldBiome[biome]]++;
+    });
+    return Object.keys(counter)[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
+  }
+
+  public static maxCountBiome2(no: WorldBiome, ne: WorldBiome, so: WorldBiome, se: WorldBiome): string {
+    const counter: { [id: string]: number } = {
+      'swallowWater': 0,
+      'deepWater': 0,
+      'grass': 0,
+      'woods': 0,
+      'forest': 0,
+      'sandy': 0,
+      'beach': 0,
+      'mountain': 0,
+      'snow': 0,
+      'shoreline': 0
+    }
+    counter[WorldBiome[no]]++;
+    counter[WorldBiome[ne]]++;
+    counter[WorldBiome[so]]++;
+    counter[WorldBiome[se]]++;
+    return Object.keys(counter)[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
+  }
+
+  public static prepareAllBiomes(): { [id: string]: Line[]; } {
+    const allBiomes: { [id: string]: Line[]; } = {};
+    Object.keys(WorldBiome).forEach((biome) => allBiomes[biome] = []);
+    return allBiomes;
+  }
 }
 
 class Progress {
@@ -258,7 +297,7 @@ class Progress {
   public step: number = 0;
   private ini: Date = new Date();
   private lastCheck: number = 0;
-  constructor(private context:string, private total: number, autoStart = false, stepDiv = 10) {
+  constructor(private context:string, private total: number, autoStart = false, stepDiv = 20) {
     this.total = total;
     this.step = this.total / stepDiv;
     this.progress = 0;
@@ -282,7 +321,7 @@ class Progress {
       const partial = new Date();
       if (this.ini !== null) {
       const check = Helper.TruncDecimals(partial.getTime() / 1000 - this.ini.getTime() / 1000, 3);
-      console.log(`[${this.context}] ${Math.round((this.progress * 100) / this.total)}% partial-duration: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s ${check}s`);
+      console.log(`[${this.context}] ${Math.round((this.progress * 100) / this.total)}% check: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s ${check}s`);
       this.lastCheck = check;
       }
     }
@@ -406,12 +445,12 @@ export class WorldBuilder {
     return data;
   }
 
-  public GetInformation(coordinate: Coordinate, factor = 1) {
-    if (coordinate.radius === null) {
-      coordinate.radius = factor;
+  public GetInformation(coordinate: Point): WorldInfo {
+    if (coordinate.Z === null) {
+      coordinate.Z = 1;
     }
-    var point = Converter.ToCardian(coordinate);
-    const topology = Math.trunc((Perlin.Noise(point, factor, this.noise.topology, 0.68) + 0.5) * 100) / 100;
+    var point = coordinate.toCardian();
+    const topology = Math.trunc((Perlin.Noise(point, coordinate.Z, this.noise.topology, 0.68) + 0.5) * 100) / 100;
     return new WorldInfo(topology, coordinate);
   }
 
@@ -419,33 +458,37 @@ export class WorldBuilder {
     const progress = new Progress('getLayers', width * height);
     return new Promise<{ [id: string]: string; }>(resolve => {
       progress.start();
-      const allLayers: { [id: string]: Vector[]; } = {};
+      const allLayers: { [id: string]: Line[]; } = WorldInfo.prepareAllBiomes();
+
       for (let x = 0; x < width - 1; x++) {
         for (let y = 0; y < height - 1; y++) {
           progress.check();
-          const no = new Point(x, y, 0);
-          const noInfo = this.GetInformation(Converter.FromMercator(no, width, height));
-          const ne = new Point((1 + x), y, 0);
-          const neInfo = this.GetInformation(Converter.FromMercator(ne, width, height));
-          const so = new Point(x, (1 + y), 0);
-          const soInfo = this.GetInformation(Converter.FromMercator(so, width, height));
-          const se = new Point((1 + x), (1 + y), 0);
-          const seInfo = this.GetInformation(Converter.FromMercator(se, width, height));
+          
+          // const no = new Point(x, y, 0);
+          // const noInfo = this.GetInformation(no.fromMercator(width, height));
+          // const ne = new Point((1 + x), y, 0);
+          // const neInfo = this.GetInformation(ne.fromMercator(width, height));
+          // const so = new Point(x, (1 + y), 0);
+          // const soInfo = this.GetInformation(so.fromMercator(width, height));
+          // const se = new Point((1 + x), (1 + y), 0);
+          // const seInfo = this.GetInformation(se.fromMercator(width, height));
 
-          if (allLayers[WorldBiome[noInfo.Biome]] === undefined || allLayers[WorldBiome[noInfo.Biome]] === null)
-            allLayers[WorldBiome[noInfo.Biome]] = [];
-          if (allLayers[WorldBiome[neInfo.Biome]] === undefined || allLayers[WorldBiome[neInfo.Biome]] === null)
-            allLayers[WorldBiome[neInfo.Biome]] = [];
-          if (allLayers[WorldBiome[soInfo.Biome]] === undefined || allLayers[WorldBiome[soInfo.Biome]] === null)
-            allLayers[WorldBiome[soInfo.Biome]] = [];
-          if (allLayers[WorldBiome[seInfo.Biome]] === undefined || allLayers[WorldBiome[seInfo.Biome]] === null)
-            allLayers[WorldBiome[seInfo.Biome]] = [];
+          // // if (allLayers[WorldBiome[noInfo.Biome]] === undefined || allLayers[WorldBiome[noInfo.Biome]] === null)
+          // //   allLayers[WorldBiome[noInfo.Biome]] = [];
+          // // if (allLayers[WorldBiome[neInfo.Biome]] === undefined || allLayers[WorldBiome[neInfo.Biome]] === null)
+          // //   allLayers[WorldBiome[neInfo.Biome]] = [];
+          // // if (allLayers[WorldBiome[soInfo.Biome]] === undefined || allLayers[WorldBiome[soInfo.Biome]] === null)
+          // //   allLayers[WorldBiome[soInfo.Biome]] = [];
+          // // if (allLayers[WorldBiome[seInfo.Biome]] === undefined || allLayers[WorldBiome[seInfo.Biome]] === null)
+          // //   allLayers[WorldBiome[seInfo.Biome]] = [];
 
-          if (noInfo.Biome === neInfo.Biome && soInfo.Biome === seInfo.Biome && noInfo.Biome === seInfo.Biome) {
-            [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[WorldBiome[noInfo.Biome]], vector));
-          } else {
-            [new Vector(no, ne), new Vector(ne, se), new Vector(se, so), new Vector(so, no)].forEach((vector) => Vector.AddInIfInvertNotExistsAndRemoveItFrom(allLayers[this.maxCountBiome(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome)], vector));
-          }
+          // if (noInfo.Biome === neInfo.Biome && soInfo.Biome === seInfo.Biome && noInfo.Biome === seInfo.Biome) {
+          //   [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)].forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldBiome[noInfo.Biome]]));
+          // } else {
+          //   [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)].forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldInfo.maxCountBiome2(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome)]));
+          // }
+
+          Point.getSquares(new Point(x, y), (p) => this.GetInformation(p.fromMercator(width, height)), allLayers);
         }
       }
       const layers: { [id: string]: string; } = {};
@@ -455,25 +498,5 @@ export class WorldBuilder {
       resolve(layers);
       progress.stop();
     });
-  }
-
-  private maxCountBiome(no: WorldBiome, ne: WorldBiome, so: WorldBiome, se: WorldBiome): string {
-    const counter: { [id: string]: number } = {
-      'swallowWater': 0,
-      'deepWater': 0,
-      'grass': 0,
-      'woods': 0,
-      'forest': 0,
-      'sandy': 0,
-      'beach': 0,
-      'mountain': 0,
-      'snow': 0,
-      'shoreline': 0
-    }
-    counter[WorldBiome[no]]++;
-    counter[WorldBiome[ne]]++;
-    counter[WorldBiome[so]]++;
-    counter[WorldBiome[se]]++;
-    return Object.keys(counter)[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
   }
 }
