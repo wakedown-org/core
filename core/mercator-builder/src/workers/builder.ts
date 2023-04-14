@@ -53,28 +53,28 @@ class Layer {
     return path;
   }
 
-  public static Transform(allVectors: Line[]): Layer {
-    const copyVectors = [ ...allVectors ];
+  public static Generate(allLines: Line[]): Layer {
+    const copyLines = [ ...allLines ];
     const closedCircuits: Layer[] = [];
-      while (copyVectors.length > 0) {
-        const vectors: Line[] = [];
-        const startVector = copyVectors.pop()!;
-        vectors.push(startVector.copy);
+      while (copyLines.length > 0) {
+        const lines: Line[] = [];
+        const startVector = copyLines.pop()!;
+        lines.push(startVector.copy);
         let runner = startVector.copy;
         while (!runner.end.equals(startVector.start)) {
-          let vectorIdx = copyVectors.findIndex((v) => runner.end.equals(v.start));
+          let vectorIdx = copyLines.findIndex((v) => runner.end.equals(v.start));
           let isInverted = false;
           if (vectorIdx === -1) { 
-            vectorIdx = copyVectors.findIndex((v) => runner.end.equals(v.end)); 
+            vectorIdx = copyLines.findIndex((v) => runner.end.equals(v.end)); 
             isInverted = true;
           }
-          runner = copyVectors.splice(vectorIdx, 1)[0].copy;
+          runner = copyLines.splice(vectorIdx, 1)[0].copy;
           if (isInverted) { 
             runner = new Line(runner.end, runner.start);
           }
-          vectors.push(runner.copy);
+          lines.push(runner.copy);
         }
-        closedCircuits.push(new Layer(vectors).shrunk());
+        closedCircuits.push(new Layer(lines).shrunk());
       }
       const layer = new Layer();
       layer.innerLayers = closedCircuits;
@@ -129,25 +129,9 @@ class Point {
     return new Point(Math.round((this.Y + 180) / (360 / width)), Math.round((this.X + 90) / (180 / height)), this.Z);
   }
 
-  static square(point: Point): Line[] {
-    const a = new Point(point.X, point.Y, point.Z), 
-      b = new Point((1 + point.X), point.Y, point.Z), 
-      c = new Point(point.X, (1 + point.Y), point.Z), 
-      d = new Point((1 + point.X), (1 + point.Y), point.Z);
-    return [new Line(a, b), new Line(b, c), new Line(c, d), new Line(d, a)];
-  }
-
-  static getSquares(point: Point, getInformation: (p: Point) => WorldInfo, allLayers: { [id: string]: Line[]; }) {
-    const square = Point.square(point);
-    const biomes = square.map((line) => getInformation(line.start).Biome);
-    
-    if (biomes[0] === biomes[1] && biomes[1] === biomes[2] && biomes[2] === biomes[3]) {
-      square.forEach((line) => 
-        Line.AddInIfInvertNotExistsAndRemoveItFrom(line, allLayers[WorldBiome[biomes[0]]]));
-    } else {
-      square.forEach((line) => 
-        Line.AddInIfInvertNotExistsAndRemoveItFrom(line, allLayers[WorldInfo.maxCountBiome(biomes)]));
-    }
+  public toVector(transform: (n: Point) => Point = (p) => p): number[] {
+    const tranformed = transform(this);
+    return [tranformed.X, tranformed.Y, tranformed.Z];
   }
 }
 
@@ -265,26 +249,6 @@ class WorldInfo {
     return Object.keys(counter)[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
   }
 
-  public static maxCountBiome2(no: WorldBiome, ne: WorldBiome, so: WorldBiome, se: WorldBiome): string {
-    const counter: { [id: string]: number } = {
-      'swallowWater': 0,
-      'deepWater': 0,
-      'grass': 0,
-      'woods': 0,
-      'forest': 0,
-      'sandy': 0,
-      'beach': 0,
-      'mountain': 0,
-      'snow': 0,
-      'shoreline': 0
-    }
-    counter[WorldBiome[no]]++;
-    counter[WorldBiome[ne]]++;
-    counter[WorldBiome[so]]++;
-    counter[WorldBiome[se]]++;
-    return Object.keys(counter)[Object.values(counter).indexOf(Math.max(...Object.values(counter)))];
-  }
-
   public static prepareAllBiomes(): { [id: string]: Line[]; } {
     const allBiomes: { [id: string]: Line[]; } = {};
     Object.keys(WorldBiome).forEach((biome) => allBiomes[biome] = []);
@@ -312,7 +276,8 @@ class Progress {
 
   stop() {
     const end = new Date();
-    console.log(`[${this.context}] duration ${Helper.TruncDecimals(end.getTime() / 1000 - this.ini.getTime() / 1000, 3)}s ${end}`);
+    const check = Helper.TruncDecimals(end.getTime() / 1000 - this.ini.getTime() / 1000, 3);
+    console.log(`[${this.context}] last: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s duration: ${check}s ${end}`);
   }
 
   check() {
@@ -461,41 +426,57 @@ export class WorldBuilder {
       const allLayers: { [id: string]: Line[]; } = WorldInfo.prepareAllBiomes();
 
       for (let x = 0; x < width - 1; x++) {
-        for (let y = 0; y < height - 1; y++) {
+        for (let y = 0; y < height - 1; y++) {          
+          const no = new Point(x, y, 0),
+            ne = new Point((1 + x), y, 0),
+            so = new Point(x, (1 + y), 0),
+            se = new Point((1 + x), (1 + y), 0);
+
+          var square = [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)];
+
+          var biomes = square.map((line) => this.GetInformation(line.start.fromMercator(width, height)).Biome);
+
+          if (biomes[0] === biomes[1] && biomes[2] === biomes[3] && biomes[0] === biomes[3]) {
+            square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldBiome[biomes[0]]]));
+          } else {
+            square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldInfo.maxCountBiome(biomes)]));
+          }
+
           progress.check();
-          
-          // const no = new Point(x, y, 0);
-          // const noInfo = this.GetInformation(no.fromMercator(width, height));
-          // const ne = new Point((1 + x), y, 0);
-          // const neInfo = this.GetInformation(ne.fromMercator(width, height));
-          // const so = new Point(x, (1 + y), 0);
-          // const soInfo = this.GetInformation(so.fromMercator(width, height));
-          // const se = new Point((1 + x), (1 + y), 0);
-          // const seInfo = this.GetInformation(se.fromMercator(width, height));
-
-          // // if (allLayers[WorldBiome[noInfo.Biome]] === undefined || allLayers[WorldBiome[noInfo.Biome]] === null)
-          // //   allLayers[WorldBiome[noInfo.Biome]] = [];
-          // // if (allLayers[WorldBiome[neInfo.Biome]] === undefined || allLayers[WorldBiome[neInfo.Biome]] === null)
-          // //   allLayers[WorldBiome[neInfo.Biome]] = [];
-          // // if (allLayers[WorldBiome[soInfo.Biome]] === undefined || allLayers[WorldBiome[soInfo.Biome]] === null)
-          // //   allLayers[WorldBiome[soInfo.Biome]] = [];
-          // // if (allLayers[WorldBiome[seInfo.Biome]] === undefined || allLayers[WorldBiome[seInfo.Biome]] === null)
-          // //   allLayers[WorldBiome[seInfo.Biome]] = [];
-
-          // if (noInfo.Biome === neInfo.Biome && soInfo.Biome === seInfo.Biome && noInfo.Biome === seInfo.Biome) {
-          //   [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)].forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldBiome[noInfo.Biome]]));
-          // } else {
-          //   [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)].forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldInfo.maxCountBiome2(noInfo.Biome, neInfo.Biome, soInfo.Biome, seInfo.Biome)]));
-          // }
-
-          Point.getSquares(new Point(x, y), (p) => this.GetInformation(p.fromMercator(width, height)), allLayers);
         }
       }
-      const layers: { [id: string]: string; } = {};
+      const layers: { [id: string]: Layer; } = {};
       Object.keys(allLayers).forEach((layerName: string) => {
-        layers[layerName] = Layer.Transform(allLayers[layerName]).AsSvgPath();
+        layers[layerName] = Layer.Generate(allLayers[layerName]);
       });
-      resolve(layers);
+
+      console.log('layers', layers);
+
+      const geoPaths: number[][][] = [];
+      const shoreline = layers['shoreline'];
+      shoreline.innerLayers.forEach((layer) => {
+        const geoPath: number[][] = [];
+
+        layer.limit.forEach((line) => {
+          geoPath.push(line.start.toVector(p => p.fromMercator(width, height)));
+        });
+
+        geoPaths.push(geoPath);
+      });
+
+      console.log(`geoPath`, geoPaths, layers);
+
+      const layersAsSvg: { [id: string]: string; } = {};
+
+      Object.keys(layers).forEach((layerName: string) => {
+        //console.log(`layer [${layerName}] ${layers[layerName].limit.length} ${layers[layerName].innerLayers.length}`);
+
+        //layers[layerName].innerLayers.forEach((innerLayer) => console.log(`innerLayer [${layerName}] ${innerLayer.limit.length} ${innerLayer.innerLayers.length}`));
+
+        layersAsSvg[layerName] = layers[layerName].AsSvgPath();
+      });
+
+      resolve(layersAsSvg);
       progress.stop();
     });
   }

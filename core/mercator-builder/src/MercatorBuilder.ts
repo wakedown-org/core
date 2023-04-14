@@ -3,10 +3,146 @@ import { property } from 'lit/decorators.js';
 import { until } from 'lit/directives/until.js';
 import { asyncAppend } from 'lit/directives/async-append.js';
 
-async function *handleLayers(layers: { [id: string]: string; }) {
+import * as d3 from "d3";
+
+import versor from "versor";
+
+// const d3 = await Promise.all([
+//   import("d3"),
+//   import("d3-drag"),
+//   import("d3-delaunay"),
+//   import("d3-geo"),
+//   import("d3-geo-voronoi"),
+//   import("d3-zoom")
+// ]).then(d3 => Object.assign({}, ...d3));
+
+async function* handleLayers(layers: { [id: string]: string; }) {
   const keys = Object.keys(layers);
   for (let i = 0; i < keys.length; i++) {
-      yield { name: keys[i], path: layers[keys[i]] };
+    yield { name: keys[i], path: layers[keys[i]] };
+  }
+}
+
+class moveMap {
+  private v0: any;
+  private q0: any;
+  private r0: any;
+
+  constructor (private projection: any) {
+
+  }
+
+  public static _origin(): number[] {
+    return [0, 0];
+  }
+
+  public static _center(width: number, height: number): number[] {
+    return [
+      this.truncateInt(width/2),
+      this.truncateInt(height/2)
+    ];
+  }
+
+  public dragstarted(point: any[]) {
+    this.v0 = versor.cartesian(this.projection.invert(point));
+    this.r0 = this.projection.rotate();
+    this.q0 = versor(this.r0);
+  }
+
+  public dragged(point: any[]) {
+    var v1 = versor.cartesian(this.projection.rotate(this.r0).invert(point)),
+      q1 = versor.multiply(this.q0, versor.delta(this.v0, v1)),
+      r1 = versor.rotation(q1);
+    this.projection.rotate(r1);
+  }
+
+  public zoom(factor: number) {
+    this.projection.scale(10 ** (factor));
+  }
+
+  public showLoc(point: any[]) {
+    return this.projection.invert(point);
+  }
+
+  public static interpolateProjection(d3: any, raw0: any, raw1: any) {
+    const mutate = d3.geoProjectionMutator((t: any) => (x: any, y: any) => {
+      const [x0, y0] = raw0(x, y), [x1, y1] = raw1(x, y);
+      return [x0 + t * (x1 - x0), y0 + t * (y1 - y0)];
+    });
+    let t = 0;
+    return Object.assign(mutate(t), {
+      alpha(_: any) {
+        return arguments.length ? mutate(t = +_) : t;
+      }
+    });
+  }
+
+  public static truncateInt(number: number): number {
+    return Math.trunc(number);
+  }
+}
+
+class GeoJson {
+  constructor (
+    public features: GeoJsonFeature[], 
+    public type: string = 'FeatureCollection') {
+  }
+
+  static Build(geometry: GeoJsonGeometry, properties: { [id: string] : string; } = {}): GeoJson {
+    return new GeoJson([new GeoJsonFeature(geometry, properties)]);
+  }
+}
+
+class GeoJsonFeature {
+  constructor (
+    public geometry: GeoJsonGeometry, 
+    public properties: { [id: string] : string; } = {}, 
+    public type: string = 'Feature') {
+
+  }
+}
+
+class GeoJsonGeometry {
+  constructor ( 
+    public coordinates: number[] | number[][] | number[][][] | number[][][][],
+    public type: 'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon' = 'Polygon') {
+      
+    }
+}
+
+class GeoJsonPoint extends GeoJsonGeometry {
+  constructor (public coordinates: number[]) {
+    super(coordinates, 'Point')
+  }
+}
+
+class GeoJsonMultiPoint extends GeoJsonGeometry {
+  constructor (public coordinates: number[][]) {
+    super(coordinates, 'MultiPoint')
+  }
+}
+
+class GeoJsonLineString extends GeoJsonGeometry {
+  constructor (public coordinates: number[][]) {
+    super(coordinates, 'LineString')
+  }
+}
+
+class GeoJsonMultiLineString extends GeoJsonGeometry {
+  constructor (public coordinates: number[][][]) {
+    super(coordinates, 'MultiLineString')
+  }
+}
+
+class GeoJsonPolygon extends GeoJsonGeometry {
+  constructor (public coordinates: number[][][]) {
+    super(coordinates, 'Polygon')
+  }
+}
+
+class GeoJsonMultiPolygon extends GeoJsonGeometry {
+  constructor (public coordinates: number[][][][]) {
+    super(coordinates, 'MultiPolygon')
   }
 }
 
@@ -98,8 +234,12 @@ export class MercatorBuilder extends LitElement {
     }
   `;
 
+  // @Element() element: HTMLElement;
+  private _moveMap: moveMap | null = null;
+  private _rotationPaused = true;
   private _worker: Worker | null = null;
 
+  @property({ type: Boolean }) isFlat = true;
   @property({ type: Number }) seed = 8;
   @property({ type: Number }) width = 880;
   @property({ type: Number }) height = 440;
@@ -117,26 +257,92 @@ export class MercatorBuilder extends LitElement {
     if (this._worker === null) {
       this._worker = new Worker('./dist/src/workers/worker.js', { type: 'module' });
       this._worker.onmessage = (event: any) => {
-        const data = event.data as { layers: { [id: string]: string; }};
+        const data = event.data as { layers: { [id: string]: string; } };
         resolve(svg`
 <svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width * this.scale} ${this.height * this.scale}">
   ${asyncAppend(handleLayers(data.layers), (layer: any) => svg`<path id="${layer.name}" d="${layer.path}"/>`)}
 </svg>`);
+      }
+      this._worker.postMessage({ seed: this.seed, width: this.width * this.scale, height: this.height * this.scale });
     }
-    this._worker.postMessage({ seed: this.seed, width: this.width * this.scale, height: this.height * this.scale });
-  }
   });
 
-constructor() {
-  super();
-}
+  constructor() {
+    super();
+  }
 
-render() {
-  return svg`
+  render() {
+    return svg`
       <div class="world">
         ${until(this.world, this.loading)}
       </div>
     `;
-}
+  }
+
+  display(layers: GeoJson, showSite = true, scale = 2.2, center: number[] | null = null) {
+    if (center === null) center = moveMap._origin();
+    const projection = (this.isFlat ?
+      d3.geoEquirectangular() :
+      d3.geoOrthographic()).scale(10 ** scale).center([center[0],center[1]]);
+
+    const path = <d3.GeoPath<any,any>>d3.geoPath().projection(projection);
+
+    var svg = d3.select(this.renderRoot.querySelector("#map"));
+    this._moveMap = new moveMap(projection);
+
+    svg.append('g')
+      .attr('class', 'polygons')
+      .selectAll('path')
+      .data(layers.features)
+      .enter()
+      .append('path')
+      .attr('d', path)
+      .attr('fill', (feature: GeoJsonFeature, i: number) => d3.schemeCategory10[i % 10]);
+
+    svg.append('path')
+      .attr('class', 'sites')
+      .datum(showSite ?
+        new GeoJsonMultiPoint(layers.features.map(f => f.properties['site']).map((d) => [+d[0], +d[1]])) :
+        new GeoJsonMultiPoint([center]))
+      .attr('d', path);
+
+    d3.interval((elapsed: number) => {
+      if (!this._rotationPaused) {
+        projection.rotate([elapsed / 150 % 360, 0]);
+        svg.selectAll('path').attr('d', path);
+      }
+    }, 50);
+
+    // svg.call(
+    //   d3.drag(svg)
+    //     .on("start", (d: any) => {
+    //       this._rotationPaused = true;
+    //       this._moveMap?.dragstarted([d.x, d.y]);
+    //     })
+    //     .on("drag", (d: any) => {
+    //       this._moveMap?.dragged([d.x, d.y]);
+    //       svg.selectAll('path').attr('d', path);
+    //     })).
+    //   on("end", (d: any) => {
+    //     this._rotationPaused = false;
+    //   });
+    // svg.call(
+    //   d3.zoom().on("zoom", (d: any) => {
+    //     this._moveMap?.zoom(scale * d.transform.k);
+    //     svg.selectAll('path').attr('d', path);
+    //   })
+    // )
+    // svg.on("click", (d: any) => {
+    //   console.log('click', [d.x, d.y], projection.invert([d.x, d.y]))
+    //   // this._moveMap?.dragstarted([d.x, d.y]);
+    //   // this._moveMap?.dragged(moveMap._center(this.width, this.height));
+
+    //   // svg.selectAll('path').attr('d', path);
+    //   // this._rotationPaused = false;
+    // })
+
+
+  }
+
 }
 
