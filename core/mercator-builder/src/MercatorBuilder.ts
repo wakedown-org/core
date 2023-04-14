@@ -6,6 +6,7 @@ import { asyncAppend } from 'lit/directives/async-append.js';
 import * as d3 from "d3";
 
 import versor from "versor";
+import { GeoJson, GeoJsonFeature, GeoJsonMultiPoint } from './models/geojson';
 
 // const d3 = await Promise.all([
 //   import("d3"),
@@ -79,70 +80,6 @@ class moveMap {
 
   public static truncateInt(number: number): number {
     return Math.trunc(number);
-  }
-}
-
-class GeoJson {
-  constructor (
-    public features: GeoJsonFeature[], 
-    public type: string = 'FeatureCollection') {
-  }
-
-  static Build(geometry: GeoJsonGeometry, properties: { [id: string] : string; } = {}): GeoJson {
-    return new GeoJson([new GeoJsonFeature(geometry, properties)]);
-  }
-}
-
-class GeoJsonFeature {
-  constructor (
-    public geometry: GeoJsonGeometry, 
-    public properties: { [id: string] : string; } = {}, 
-    public type: string = 'Feature') {
-
-  }
-}
-
-class GeoJsonGeometry {
-  constructor ( 
-    public coordinates: number[] | number[][] | number[][][] | number[][][][],
-    public type: 'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon' = 'Polygon') {
-      
-    }
-}
-
-class GeoJsonPoint extends GeoJsonGeometry {
-  constructor (public coordinates: number[]) {
-    super(coordinates, 'Point')
-  }
-}
-
-class GeoJsonMultiPoint extends GeoJsonGeometry {
-  constructor (public coordinates: number[][]) {
-    super(coordinates, 'MultiPoint')
-  }
-}
-
-class GeoJsonLineString extends GeoJsonGeometry {
-  constructor (public coordinates: number[][]) {
-    super(coordinates, 'LineString')
-  }
-}
-
-class GeoJsonMultiLineString extends GeoJsonGeometry {
-  constructor (public coordinates: number[][][]) {
-    super(coordinates, 'MultiLineString')
-  }
-}
-
-class GeoJsonPolygon extends GeoJsonGeometry {
-  constructor (public coordinates: number[][][]) {
-    super(coordinates, 'Polygon')
-  }
-}
-
-class GeoJsonMultiPolygon extends GeoJsonGeometry {
-  constructor (public coordinates: number[][][][]) {
-    super(coordinates, 'MultiPolygon')
   }
 }
 

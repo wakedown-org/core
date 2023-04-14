@@ -1,3 +1,7 @@
+import * as d3 from "d3";
+import * as d3V from 'd3-geo-voronoi';
+import { GeoJson } from "../models/geojson";
+
 class Layer {
   constructor(public limit: Line[] = [], public innerLayers: Layer[] = []) { }
 
@@ -293,6 +297,20 @@ class Progress {
   }
 }
 
+class PseudoRandom {
+  constructor (public seed: number, private _divergent = 0) { }
+  public get random(): number {
+    let copy = (this.seed + this._divergent++).valueOf();
+    copy = ((copy + 0x7ED55D16) + (copy << 12)) & 0xFFFFFFFF;
+    copy = ((copy ^ 0xC761C23C) ^ (copy >>> 19)) & 0xFFFFFFFF;
+    copy = ((copy + 0x165667B1) + (copy << 5)) & 0xFFFFFFFF;
+    copy = ((copy + 0xD3A2646C) ^ (copy << 9)) & 0xFFFFFFFF;
+    copy = ((copy + 0xFD7046C5) + (copy << 3)) & 0xFFFFFFFF;
+    copy = ((copy ^ 0xB55A4F09) ^ (copy >>> 16)) & 0xFFFFFFFF;
+    return (copy & 0xFFFFFFF) / 0x10000000;
+  }
+}
+
 enum WorldBiome {
   deepWater,
   swallowWater,
@@ -381,10 +399,12 @@ class Perlin {
 
 export class WorldBuilder {
   private noise: { raw: number[], topology: number[] } = { raw: [], topology: [] };
+  private pseudo: PseudoRandom;
   constructor(public seed = 8, useDefault = true, public tiltInDegree = 23.43, public oceanLevel = 0.5, public rotationSpeedInHours = 24, public numLatitudes = 12, public radius = 5000) {
     this.prepareSeed(this.seed);
     this.noise.raw = useDefault ? Perlin.DefaultP : Perlin.RandomP;
     this.noise.topology = this.generateNoise(this.noise.raw, this.seed);
+    this.pseudo = new PseudoRandom(this.seed);
   }
 
   private prepareSeed(seed: number) {
@@ -424,6 +444,7 @@ export class WorldBuilder {
     return new Promise<{ [id: string]: string; }>(resolve => {
       progress.start();
       const allLayers: { [id: string]: Line[]; } = WorldInfo.prepareAllBiomes();
+      //const voronoi = this.getVoronoi();
 
       for (let x = 0; x < width - 1; x++) {
         for (let y = 0; y < height - 1; y++) {          
@@ -479,5 +500,20 @@ export class WorldBuilder {
       resolve(layersAsSvg);
       progress.stop();
     });
+  }
+
+  public getVoronoi(siteSize: number = 18) {
+    const points: number[][] = [];
+    d3.range(0, siteSize ?? 18).forEach((_: number) => {
+      points.push([
+        360 * this.pseudo.random - 180,
+        180 * this.pseudo.random - 90
+      ]);
+    });
+    const voronoi: GeoJson = d3V.geoVoronoi()
+      .x((p: number[]) => +p[0])
+      .y((p: number[]) => +p[1])
+      (points).polygons();
+    return voronoi;
   }
 }
