@@ -1,9 +1,9 @@
 import * as d3 from "d3";
 import * as d3V from 'd3-geo-voronoi';
-import { GeoJson } from "../models/geojson";
+import { GeoJson, GeoJsonFeature, GeoJsonMultiPolygon, GeoJsonPolygon } from "../models/geojson";
 
 class Layer {
-  constructor(public limit: Line[] = [], public innerLayers: Layer[] = []) { }
+  constructor(public name: string = '', public limit: Line[] = [], public innerLayers: Layer[] = []) { }
 
   public shrunk(): Layer {
     const layer = [...this.limit];
@@ -18,7 +18,7 @@ class Layer {
       }
     }
     array.push(runner.copy);
-    return new Layer(array, this.innerLayers);
+    return new Layer(this.name, array, this.innerLayers);
   }
 
   public inside(point: Point) {
@@ -31,14 +31,6 @@ class Layer {
       if (intersect) inside = !inside;
     }
     return inside;
-  }
-
-  public static DefaultSort(l1: Layer, l2: Layer): number {
-    if (l1.limit.length > l2.limit.length)
-      return 1;
-    if (l1.limit.length < l2.limit.length)
-      return -1
-    return 0;
   }
 
   public AsSvgPath(circular: boolean = true): string {
@@ -57,33 +49,110 @@ class Layer {
     return path;
   }
 
-  public static Generate(allLines: Line[]): Layer {
-    const copyLines = [ ...allLines ];
+  public AsGeoJsonFeature(): GeoJsonFeature {
+    const geoPaths: number[][][] = [];
+    this.innerLayers.forEach((layer) => {
+      const geoPath: number[][] = [];
+
+      layer.limit.forEach((line) => {
+        geoPath.push(line.start.toVector());
+      });
+
+      layer.innerLayers.forEach((layer2) => {
+        layer2.limit.forEach((line2) => {
+          geoPath.push(line2.start.toVector());
+        });
+      });
+
+      geoPaths.push(geoPath);
+    });
+
+    return new GeoJsonFeature(new GeoJsonPolygon(geoPaths), { 'layer': this.name });
+  }
+
+  public static ToGeoJson(layers: Layer[]): GeoJson {
+    const geoJsonArray: number[][][][] = [];
+
+    layers.forEach((layer) => {
+      const geoPaths: number[][][] = [];
+      layer.innerLayers.forEach((layer2) => {
+        const geoPath: number[][] = [];
+
+        layer2.limit.forEach((line) => {
+          geoPath.push(line.start.toVector());
+        });
+
+        layer2.innerLayers.forEach((layer3) => {
+          layer3.limit.forEach((line2) => {
+            geoPath.push(line2.start.toVector());
+          });
+        });
+
+        geoPaths.push(geoPath);
+      });
+
+      geoJsonArray.push(geoPaths);
+    })
+
+    return GeoJson.Build(new GeoJsonMultiPolygon(geoJsonArray));
+  }
+
+  public static Generate(name: string, allLines: Line[]): Layer {
+    const copyLines = [...allLines];
     const closedCircuits: Layer[] = [];
-      while (copyLines.length > 0) {
-        const lines: Line[] = [];
-        const startVector = copyLines.pop()!;
-        lines.push(startVector.copy);
-        let runner = startVector.copy;
-        while (!runner.end.equals(startVector.start)) {
-          let vectorIdx = copyLines.findIndex((v) => runner.end.equals(v.start));
-          let isInverted = false;
-          if (vectorIdx === -1) { 
-            vectorIdx = copyLines.findIndex((v) => runner.end.equals(v.end)); 
-            isInverted = true;
-          }
-          runner = copyLines.splice(vectorIdx, 1)[0].copy;
-          if (isInverted) { 
-            runner = new Line(runner.end, runner.start);
-          }
-          lines.push(runner.copy);
+    while (copyLines.length > 0) {
+      const lines: Line[] = [];
+      const startVector = copyLines.pop()!;
+      lines.push(startVector.copy);
+      let runner = startVector.copy;
+      while (!runner.end.equals(startVector.start)) {
+        let vectorIdx = copyLines.findIndex((v) => runner.end.equals(v.start));
+        let isInverted = false;
+        if (vectorIdx === -1) {
+          vectorIdx = copyLines.findIndex((v) => runner.end.equals(v.end));
+          isInverted = true;
         }
-        closedCircuits.push(new Layer(lines).shrunk());
+        runner = copyLines.splice(vectorIdx, 1)[0].copy;
+        if (isInverted) {
+          runner = new Line(runner.end, runner.start);
+        }
+        lines.push(runner.copy);
       }
-      const layer = new Layer();
-      layer.innerLayers = closedCircuits;
-      layer.Process();
-      return layer;
+      closedCircuits.push(new Layer(name, lines).shrunk());
+    }
+    const layer = new Layer(name);
+    layer.innerLayers = closedCircuits;
+    layer.ProcessNew();
+    return layer;
+  }
+
+  public static DefaultSort(l1: Layer, l2: Layer): number {
+    if (l1.limit.length > l2.limit.length)
+      return 1;
+    if (l1.limit.length < l2.limit.length)
+      return -1
+    return 0;
+  }
+
+  public ProcessNew() {
+    this.innerLayers.sort(Layer.DefaultSort);
+    let runner: Layer | undefined = this;
+    const runnerCopyInnerLayers = [...runner.innerLayers];
+    while (runner !== undefined) {
+      const copyInnerLayers = [...runner.innerLayers];
+      for (let i = 0; i < copyInnerLayers.length; i++) {
+        for (let j = runner.innerLayers.length - 1; j > 0; j--) {
+          if (i !== j) {
+            if (copyInnerLayers[i].inside(runner.innerLayers[j].limit[0].start)) {
+              const innerLayer = runner.innerLayers.splice(j, 1)[0];
+              copyInnerLayers[i].innerLayers.push(innerLayer);
+            }
+          }
+        }
+      }
+      runner = runnerCopyInnerLayers.pop();
+    }
+
   }
 
   public Process() {
@@ -137,6 +206,10 @@ class Point {
     const tranformed = transform(this);
     return [tranformed.X, tranformed.Y, tranformed.Z];
   }
+
+  public static fromCoordinate(coordinate: number[]): Point {
+    return new Point(coordinate[0], coordinate[1], coordinate[2]);
+  }
 }
 
 class Line {
@@ -165,8 +238,8 @@ class Line {
   }
 
   public isClockwise(vector: Line): boolean {
-    const dot = (this.end.X - this.start.X)*(vector.end.X - vector.start.X) + (this.end.Y - this.start.Y)*(vector.end.Y - vector.start.Y);
-    const det = (this.end.X - this.start.X)*(vector.end.Y - vector.start.Y) - (this.end.Y - this.start.Y)*(vector.end.X - vector.start.X);
+    const dot = (this.end.X - this.start.X) * (vector.end.X - vector.start.X) + (this.end.Y - this.start.Y) * (vector.end.Y - vector.start.Y);
+    const det = (this.end.X - this.start.X) * (vector.end.Y - vector.start.Y) - (this.end.Y - this.start.Y) * (vector.end.X - vector.start.X);
     return Math.atan2(det, dot) > 0;
   }
 
@@ -181,6 +254,22 @@ class Line {
     } else {
       vectors.push(vector);
     }
+  }
+
+  public static toPolygon(lines: Line[]): number[][] {
+    const poly: number[][] = [];
+    lines.forEach((line) => poly.push(line.start.toVector()));
+    return poly;
+  }
+
+  public static fromPolygon(polygon: number[][]): Line[] {
+    const lines: Line[] = [];
+    for (let idx = 0; idx < polygon.length - 1; idx++) {
+      const current = Point.fromCoordinate(polygon[idx]);
+      const next = Point.fromCoordinate(polygon[idx+1]);
+      lines.push(new Line(current, next));
+    }
+    return lines;
   }
 }
 
@@ -255,7 +344,7 @@ class WorldInfo {
 
   public static prepareAllBiomes(): { [id: string]: Line[]; } {
     const allBiomes: { [id: string]: Line[]; } = {};
-    Object.keys(WorldBiome).forEach((biome) => allBiomes[biome] = []);
+    Object.keys(WorldBiome).forEach((biome) => { if (Number.isNaN(biome)) { allBiomes[biome] = [] } });
     return allBiomes;
   }
 }
@@ -265,7 +354,7 @@ class Progress {
   public step: number = 0;
   private ini: Date = new Date();
   private lastCheck: number = 0;
-  constructor(private context:string, private total: number, autoStart = false, stepDiv = 20) {
+  constructor(private context: string, private total: number, autoStart = false, stepDiv = 20) {
     this.total = total;
     this.step = this.total / stepDiv;
     this.progress = 0;
@@ -284,21 +373,21 @@ class Progress {
     console.log(`[${this.context}] last: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s duration: ${check}s ${end}`);
   }
 
-  check() {
+  check(msg: string = '') {
     this.progress++;
     if (this.progress % this.step === 0) {
       const partial = new Date();
       if (this.ini !== null) {
-      const check = Helper.TruncDecimals(partial.getTime() / 1000 - this.ini.getTime() / 1000, 3);
-      console.log(`[${this.context}] ${Math.round((this.progress * 100) / this.total)}% check: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s ${check}s`);
-      this.lastCheck = check;
+        const check = Helper.TruncDecimals(partial.getTime() / 1000 - this.ini.getTime() / 1000, 3);
+        console.log(`[${this.context}] ${Math.round((this.progress * 100) / this.total)}% check: ${Helper.TruncDecimals(check - this.lastCheck, 3)}s ${check}s {${msg}}`);
+        this.lastCheck = check;
       }
     }
   }
 }
 
 class PseudoRandom {
-  constructor (public seed: number, private _divergent = 0) { }
+  constructor(public seed: number, private _divergent = 0) { }
   public get random(): number {
     let copy = (this.seed + this._divergent++).valueOf();
     copy = ((copy + 0x7ED55D16) + (copy << 12)) & 0xFFFFFFFF;
@@ -393,7 +482,7 @@ class Perlin {
   }
 
   public static Noise(point: Point, factor = 1, p: number[], persistence = 0.5, octaves = 6) {
-    return this.octaves(point.X/factor, point.Y/factor, point.Z/factor, p, persistence, octaves);
+    return this.octaves(point.X / factor, point.Y / factor, point.Z / factor, p, persistence, octaves);
   }
 }
 
@@ -439,70 +528,93 @@ export class WorldBuilder {
     return new WorldInfo(topology, coordinate);
   }
 
-  public getLayers(width: number, height: number): Promise<{ [id: string]: string; }> {
-    const progress = new Progress('getLayers', width * height);
-    return new Promise<{ [id: string]: string; }>(resolve => {
+  public getLayers(numPoints: number): Promise<GeoJson> { //{ [id: string]: string; }
+    const progress = new Progress('getLayers', numPoints);
+    return new Promise<GeoJson>(resolve => {
       progress.start();
       const allLayers: { [id: string]: Line[]; } = WorldInfo.prepareAllBiomes();
-      //const voronoi = this.getVoronoi();
+      const points = this.getPoints(numPoints);
+      const voronoi = this.getVoronoi(points);
+      // const axisX: number[] = [];
+      // const axisY: number[] = [];
+      // points.forEach((point) => {
+      //   const currentX = point[0];
+      //   const currentY = point[1];
+      //   if (!axisX.includes(currentX)) axisX.push(currentX);
+      //   if (!axisY.includes(currentY)) axisY.push(currentY);
+      // });
+      // axisX.sort((a,b)=>a-b);
+      // axisY.sort((a,b)=>a-b);
+      // console.log('points', points.length, axisX, axisY, axisX.length * axisY.length);
 
-      for (let x = 0; x < width - 1; x++) {
-        for (let y = 0; y < height - 1; y++) {          
-          const no = new Point(x, y, 0),
-            ne = new Point((1 + x), y, 0),
-            so = new Point(x, (1 + y), 0),
-            se = new Point((1 + x), (1 + y), 0);
+      console.log(`voronoi`, voronoi);
 
-          var square = [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)];
-
-          var biomes = square.map((line) => this.GetInformation(line.start.fromMercator(width, height)).Biome);
-
-          if (biomes[0] === biomes[1] && biomes[2] === biomes[3] && biomes[0] === biomes[3]) {
-            square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldBiome[biomes[0]]]));
-          } else {
-            square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldInfo.maxCountBiome(biomes)]));
-          }
-
-          progress.check();
+      for (let idxV = 0; idxV < voronoi.features.length; idxV++) {
+        const feature = voronoi.features[idxV];
+        const lines = Line.fromPolygon(<number[][]>feature.geometry.coordinates[0]);
+        const biome = WorldBiome[this.GetInformation(Point.fromCoordinate(<number[]>feature.properties['site'])).Biome];
+        if (allLayers[biome] === undefined) allLayers[biome] = [];
+        for (let idxL = 0; idxL < lines.length; idxL++) {
+          const line = lines[idxL];
+          Line.AddInIfInvertNotExistsAndRemoveItFrom(line, allLayers[biome]);
         }
+        progress.check(`idxV:${idxV} lines:${lines.length} biome:${biome} polygon:${allLayers[biome].length}`);
       }
-      const layers: { [id: string]: Layer; } = {};
+
+      console.log('allLayers', allLayers);
+      // const pointsUseds: Point[] = [];
+
+      // //axisX.forEach((x: number, idx: number) => {
+      // for (let x = 0; x < width - 1; x++) {
+      //   //axisY.forEach((y: number, idy: number) => {
+      //   for (let y = 0; y < height - 1; y++) {
+      //     // const no = new Point(x, y, 0),
+      //     //   ne = new Point(1 + x, y, 0),
+      //     //   so = new Point(x, 1 + y, 0),
+      //     //   se = new Point(1 + x, 1 + y, 0);
+
+      //     // var square = [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)];
+
+      //     // var biomes = square.map((line) => {
+      //     //   const actualPoint = line.start.fromMercator(width, height);
+      //     //   pointsUseds.push(actualPoint.copy());
+      //     //   return this.GetInformation(actualPoint).Biome;
+      //     // });
+
+      //     // if (biomes[0] === biomes[1] && biomes[2] === biomes[3] && biomes[0] === biomes[3]) {
+      //     //   square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldBiome[biomes[0]]]));
+      //     // } else {
+      //     //   square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldInfo.maxCountBiome(biomes)]));
+      //     // }
+
+      //     progress.check();
+      //   }//)
+      // }//)
+      const layers: { [id: string]: GeoJsonFeature; } = {};
       Object.keys(allLayers).forEach((layerName: string) => {
-        layers[layerName] = Layer.Generate(allLayers[layerName]);
+        if (allLayers[layerName].length > 0)
+          layers[layerName] = Layer.Generate(layerName, allLayers[layerName]).AsGeoJsonFeature();
       });
 
       console.log('layers', layers);
 
-      const geoPaths: number[][][] = [];
-      const shoreline = layers['shoreline'];
-      shoreline.innerLayers.forEach((layer) => {
-        const geoPath: number[][] = [];
+      const geoJson = new GeoJson(Object.values(layers));
+      console.log(`geoJson`, geoJson);
 
-        layer.limit.forEach((line) => {
-          geoPath.push(line.start.toVector(p => p.fromMercator(width, height)));
-        });
+      // const layersAsSvg: { [id: string]: string; } = {};
 
-        geoPaths.push(geoPath);
-      });
+      // Object.keys(layers).forEach((layerName: string) => {
+      //   layersAsSvg[layerName] = layers[layerName].AsSvgPath();
+      // });
 
-      console.log(`geoPath`, geoPaths, layers);
+      //resolve(layersAsSvg);
 
-      const layersAsSvg: { [id: string]: string; } = {};
-
-      Object.keys(layers).forEach((layerName: string) => {
-        //console.log(`layer [${layerName}] ${layers[layerName].limit.length} ${layers[layerName].innerLayers.length}`);
-
-        //layers[layerName].innerLayers.forEach((innerLayer) => console.log(`innerLayer [${layerName}] ${innerLayer.limit.length} ${innerLayer.innerLayers.length}`));
-
-        layersAsSvg[layerName] = layers[layerName].AsSvgPath();
-      });
-
-      resolve(layersAsSvg);
+      resolve(geoJson);
       progress.stop();
     });
   }
 
-  public getVoronoi(siteSize: number = 18) {
+  public getPoints(siteSize: number = 18): number[][] {
     const points: number[][] = [];
     d3.range(0, siteSize ?? 18).forEach((_: number) => {
       points.push([
@@ -510,6 +622,10 @@ export class WorldBuilder {
         180 * this.pseudo.random - 90
       ]);
     });
+    return points;
+  }
+
+  public getVoronoi(points: number[][]) {
     const voronoi: GeoJson = d3V.geoVoronoi()
       .x((p: number[]) => +p[0])
       .y((p: number[]) => +p[1])

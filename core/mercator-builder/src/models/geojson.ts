@@ -1,28 +1,28 @@
 export class GeoJson {
   constructor (
-    public features: GeoJsonFeature[], 
+    public features: GeoJsonFeature[],
     public type: string = 'FeatureCollection') {
   }
 
-  static Build(geometry: GeoJsonGeometry, properties: { [id: string] : string; } = {}): GeoJson {
+  static Build(geometry: GeoJsonGeometry, properties: { [id: string] : any; } = {}): GeoJson {
     return new GeoJson([new GeoJsonFeature(geometry, properties)]);
   }
 }
 
 export class GeoJsonFeature {
   constructor (
-    public geometry: GeoJsonGeometry, 
-    public properties: { [id: string] : string; } = {}, 
+    public geometry: GeoJsonGeometry,
+    public properties: { [id: string] : any; } = {},
     public type: string = 'Feature') {
 
   }
 }
 
 export class GeoJsonGeometry {
-  constructor ( 
+  constructor (
     public coordinates: number[] | number[][] | number[][][] | number[][][][],
     public type: 'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon' = 'Polygon') {
-      
+
     }
 }
 

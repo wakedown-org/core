@@ -171,7 +171,6 @@ export class MercatorBuilder extends LitElement {
     }
   `;
 
-  // @Element() element: HTMLElement;
   private _moveMap: moveMap | null = null;
   private _rotationPaused = true;
   private _worker: Worker | null = null;
@@ -195,10 +194,15 @@ export class MercatorBuilder extends LitElement {
       this._worker = new Worker('./dist/src/workers/worker.js', { type: 'module' });
       this._worker.onmessage = (event: any) => {
         const data = event.data as { layers: { [id: string]: string; } };
+        this.display(event.data.layers);
         resolve(svg`
-<svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width * this.scale} ${this.height * this.scale}">
-  ${asyncAppend(handleLayers(data.layers), (layer: any) => svg`<path id="${layer.name}" d="${layer.path}"/>`)}
-</svg>`);
+
+        `);
+        /*
+        <svg width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width * this.scale} ${this.height * this.scale}">
+  ${ asyncAppend(handleLayers(data.layers), (layer: any) => svg`<path id="${layer.name}" d="${layer.path}"/>`) }
+</svg>
+        */
       }
       this._worker.postMessage({ seed: this.seed, width: this.width * this.scale, height: this.height * this.scale });
     }
@@ -209,14 +213,19 @@ export class MercatorBuilder extends LitElement {
   }
 
   render() {
+    // const computedStyle = getComputedStyle(this);
+    // this.width = new Number(computedStyle.getPropertyValue('width').split('px')[0]).valueOf();
+    // this.height = new Number(computedStyle.getPropertyValue('height').split('px')[0]).valueOf();
+ //
     return svg`
       <div class="world">
         ${until(this.world, this.loading)}
+        <svg id="map" width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}"></svg>
       </div>
     `;
   }
 
-  display(layers: GeoJson, showSite = true, scale = 2.2, center: number[] | null = null) {
+  display(layers: GeoJson, showSite = false, scale = 2.2, center: number[] | null = null) {
     if (center === null) center = moveMap._origin();
     const projection = (this.isFlat ?
       d3.geoEquirectangular() :
@@ -234,7 +243,21 @@ export class MercatorBuilder extends LitElement {
       .enter()
       .append('path')
       .attr('d', path)
-      .attr('fill', (feature: GeoJsonFeature, i: number) => d3.schemeCategory10[i % 10]);
+      .attr('fill', (feature: GeoJsonFeature, i: number) => {
+        switch(feature.properties['layer']) {
+          case 'shoreline': return 'rgba(0, 198, 255, 255)';
+          case 'swallowWater': return 'rgba(0, 191, 255, 255)';
+          case 'deepWater': return 'rgba(65, 105, 225, 255)';
+          case 'grass': return 'rgba(50, 205, 50, 255)';
+          case 'woods': return 'rgba(34, 139, 34, 255)';
+          case 'forest': return 'rgba(0, 100, 0, 255)';
+          case 'sandy': return 'rgba(210, 180, 140, 255)';
+          case 'beach': return 'rgba(238, 214, 175, 255)';
+          case 'mountain': return 'rgba(139, 137, 137, 255)';
+          case 'snow': return 'rgba(255, 250, 250, 255)';
+          default: return d3.schemeCategory10[i % 10];
+        }
+      });
 
     svg.append('path')
       .attr('class', 'sites')
