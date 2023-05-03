@@ -54,13 +54,15 @@ class Layer {
     this.innerLayers.forEach((layer) => {
       const geoPath: number[][] = [];
 
+      geoPath.push(layer.limit[0].start.toVector());
       layer.limit.forEach((line) => {
-        geoPath.push(line.start.toVector());
+        geoPath.push(line.end.toVector());
       });
 
       layer.innerLayers.forEach((layer2) => {
+        geoPath.push(layer2.limit[0].start.toVector());
         layer2.limit.forEach((line2) => {
-          geoPath.push(line2.start.toVector());
+          geoPath.push(line2.end.toVector());
         });
       });
 
@@ -529,23 +531,12 @@ export class WorldBuilder {
   }
 
   public getLayers(numPoints: number): Promise<GeoJson> { //{ [id: string]: string; }
-    const progress = new Progress('getLayers', numPoints);
+    let progress = new Progress('getLayers', numPoints);
     return new Promise<GeoJson>(resolve => {
       progress.start();
       const allLayers: { [id: string]: Line[]; } = WorldInfo.prepareAllBiomes();
       const points = this.getPoints(numPoints);
       const voronoi = this.getVoronoi(points);
-      // const axisX: number[] = [];
-      // const axisY: number[] = [];
-      // points.forEach((point) => {
-      //   const currentX = point[0];
-      //   const currentY = point[1];
-      //   if (!axisX.includes(currentX)) axisX.push(currentX);
-      //   if (!axisY.includes(currentY)) axisY.push(currentY);
-      // });
-      // axisX.sort((a,b)=>a-b);
-      // axisY.sort((a,b)=>a-b);
-      // console.log('points', points.length, axisX, axisY, axisX.length * axisY.length);
 
       console.log(`voronoi`, voronoi);
 
@@ -562,52 +553,21 @@ export class WorldBuilder {
       }
 
       console.log('allLayers', allLayers);
-      // const pointsUseds: Point[] = [];
+      progress.stop();
 
-      // //axisX.forEach((x: number, idx: number) => {
-      // for (let x = 0; x < width - 1; x++) {
-      //   //axisY.forEach((y: number, idy: number) => {
-      //   for (let y = 0; y < height - 1; y++) {
-      //     // const no = new Point(x, y, 0),
-      //     //   ne = new Point(1 + x, y, 0),
-      //     //   so = new Point(x, 1 + y, 0),
-      //     //   se = new Point(1 + x, 1 + y, 0);
-
-      //     // var square = [new Line(no, ne), new Line(ne, se), new Line(se, so), new Line(so, no)];
-
-      //     // var biomes = square.map((line) => {
-      //     //   const actualPoint = line.start.fromMercator(width, height);
-      //     //   pointsUseds.push(actualPoint.copy());
-      //     //   return this.GetInformation(actualPoint).Biome;
-      //     // });
-
-      //     // if (biomes[0] === biomes[1] && biomes[2] === biomes[3] && biomes[0] === biomes[3]) {
-      //     //   square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldBiome[biomes[0]]]));
-      //     // } else {
-      //     //   square.forEach((vector) => Line.AddInIfInvertNotExistsAndRemoveItFrom(vector, allLayers[WorldInfo.maxCountBiome(biomes)]));
-      //     // }
-
-      //     progress.check();
-      //   }//)
-      // }//)
+      const allLayersKeys = Object.keys(allLayers);
+      progress = new Progress('allLayers', allLayersKeys.length, true);
       const layers: { [id: string]: GeoJsonFeature; } = {};
-      Object.keys(allLayers).forEach((layerName: string) => {
+      allLayersKeys.forEach((layerName: string) => {
         if (allLayers[layerName].length > 0)
           layers[layerName] = Layer.Generate(layerName, allLayers[layerName]).AsGeoJsonFeature();
+        progress.check(`layer: ${layerName} count:${allLayers[layerName].length}`);
       });
 
       console.log('layers', layers);
 
       const geoJson = new GeoJson(Object.values(layers));
       console.log(`geoJson`, geoJson);
-
-      // const layersAsSvg: { [id: string]: string; } = {};
-
-      // Object.keys(layers).forEach((layerName: string) => {
-      //   layersAsSvg[layerName] = layers[layerName].AsSvgPath();
-      // });
-
-      //resolve(layersAsSvg);
 
       resolve(geoJson);
       progress.stop();
