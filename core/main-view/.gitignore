@@ -1,0 +1,13 @@
+/node_modules/
+/lib/
+/test/
+/workers/
+/models/
+custom-elements.json
+# top level source
+main-view.js
+main-view.js.map
+main-view.d.ts
+main-view.d.ts.map
+# only generated for size check
+main-view.bundled.js
