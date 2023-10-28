@@ -365,8 +365,9 @@ export class WorldBuilder {
 
       console.log(`voronoi`, cells);
 
-      plates.features.forEach((plate) => {
+      plates.features.forEach((plate, idx) => {
         const plate_size = 42 * this.pseudo.random;
+        plate.properties['idx'] = idx;
         plate.properties['plate_size'] = plate_size;
       });
       console.log(`plates`, plates);
@@ -374,31 +375,32 @@ export class WorldBuilder {
       const biomesGrouped: { [id: string]: GeoJsonFeature[]; } = {};
       let count = 0;
 
-      for (let idxV = 0; idxV < cells.features.length; idxV++) {
-        const feature = cells.features[idxV];
+      for (let idx = 0; idx < cells.features.length; idx++) {
+        const feature = cells.features[idx];
         const site = <number[]>feature.properties['site'];
         const perlin = this.getInformation(Point.fromCoordinate(site));
         const plate = GeoJson.GetFeatureIdxThatContainsPoint(plates, site);
-        const check = GeoJson.GetFeatureIdxThatContainsPoints(plates, <number[][]>cells.features[idxV].geometry.coordinates[0]).length;
-        if (check > 1) count++;
+        const between_plates = GeoJson.GetFeatureIdxThatContainsPoints(plates, <number[][]>feature.geometry.coordinates[0]).length > 1;
         const site_plate = <number[]>plates.features[plate].properties['site'];
         const plate_size = <number>plates.features[plate].properties['plate_size'];
 
         const distance = this.distance(site, site_plate);
         const elevation = perlin/2 + this.elevation(distance, plate_size);
 
-        const biome = WorldBiome[this.getBiome(elevation)];
+        const biome = between_plates ? 'border' : WorldBiome[this.getBiome(elevation)];
 
-        feature.properties['biome'] = check > 1 ? 'border' : biome;
+        feature.properties['idx'] = idx;
+        feature.properties['biome'] = biome;
         feature.properties['perlin'] = perlin;
         feature.properties['plate'] = plate;
+        feature.properties['between_plates'] = between_plates;
         feature.properties['plate_size'] = plate_size;
         feature.properties['elevation'] = elevation;
 
         if (biomesGrouped[biome] === undefined) biomesGrouped[biome] = [];
         biomesGrouped[biome].push(feature);
 
-        progress.check(`idxV:${idxV} biome:${biome}`);
+        progress.check(`idxV:${idx} biome:${biome}`);
       }
 
       console.log(`biomesGrouped`, biomesGrouped, count);

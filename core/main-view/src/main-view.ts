@@ -176,10 +176,10 @@ export class mainView extends LitElement {
 `;
 
 // private _moveMap: moveMap | null = null;
-private _rotationPaused = false;
+private _rotationPaused = true;
 private _worker: Worker | null = null;
 
-@property({ type: Boolean }) isFlat = false;
+@property({ type: Boolean }) isFlat = true;
 @property({ type: Number }) seed = 8;
 @property({ type: Number }) width = 880;
 @property({ type: Number }) height = 440;
