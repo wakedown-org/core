@@ -189,9 +189,15 @@ class Progress {
     if (autoStart) this.start();
   }
 
-  start() {
-    this.ini = new Date();
+  start(newTotal = -1, newContext = '', newStepDiv = 20) {
     this.lastCheck = 0;
+    this.progress = 0;
+    if (newTotal !== -1) this.total = newTotal;
+    this.step = this.total / newStepDiv;
+    if (newContext !== '') this.context = newContext;
+    
+    this.ini = new Date();
+    
     console.log(`[${this.context}] start ${this.total}`, this.ini);
   }
 
@@ -375,53 +381,119 @@ export class WorldBuilder {
       const biomesGrouped: { [id: string]: GeoJsonFeature[]; } = {};
       let count = 0;
 
-      for (let idx = 0; idx < cells.features.length; idx++) {
-        const feature = cells.features[idx];
+      cells.features.forEach((feature, idx) => {
         const site = <number[]>feature.properties['site'];
         const perlin = this.getInformation(Point.fromCoordinate(site));
-        const plate = GeoJson.GetFeatureIdxThatContainsPoint(plates, site);
-        const between_plates = GeoJson.GetFeatureIdxThatContainsPoints(plates, <number[][]>feature.geometry.coordinates[0]).length > 1;
-        const site_plate = <number[]>plates.features[plate].properties['site'];
-        const plate_size = <number>plates.features[plate].properties['plate_size'];
+        const plate_idx = GeoJson.GetFeatureIdxThatContainsPoint(plates, site);
+        const between_plates = GeoJson.GetFeatureIdxThatContainsPoints(plates, <number[][]>feature.geometry.coordinates[0]);
+        const site_plate = <number[]>plates.features[plate_idx].properties['site'];
+        const plate_size = <number>plates.features[plate_idx].properties['plate_size'];
 
         const distance = this.distance(site, site_plate);
-        const elevation = perlin/2 + this.elevation(distance, plate_size);
+        let elevation = perlin/2 + this.elevation(distance, plate_size);
 
-        const biome = between_plates ? 'border' : WorldBiome[this.getBiome(elevation)];
+        let biome = WorldBiome[this.getBiome(elevation)];
+        let cssclass = biome;
+
+        if (between_plates.length > 1) {
+          cssclass = 'border';
+
+          let elevationAverage = elevation;
+          between_plates.forEach((pidx) => {
+            if (pidx !== plate_idx) {
+              const psite = <number[]>plates.features[plate_idx].properties['site'];
+              const pdistance = this.distance(psite, site_plate);
+              const pperlin = this.getInformation(Point.fromCoordinate(psite));
+              elevationAverage += pperlin/2 + this.elevation(pdistance, plate_size);
+            }
+          });
+          elevationAverage /= between_plates.length;
+
+          elevation = elevationAverage;
+          biome = WorldBiome[this.getBiome(elevation)];
+        }
+
+        let plate_cells = plates.features[plate_idx].properties['cells'] as number[];
+        if (plate_cells === undefined) plate_cells = [];
+        plate_cells.push(idx);
+        plates.features[plate_idx].properties['cells'] = plate_cells;
 
         feature.properties['idx'] = idx;
         feature.properties['biome'] = biome;
+        feature.properties['cssclass'] = cssclass;
         feature.properties['perlin'] = perlin;
-        feature.properties['plate'] = plate;
+        feature.properties['plate'] = plate_idx;
         feature.properties['between_plates'] = between_plates;
         feature.properties['plate_size'] = plate_size;
         feature.properties['elevation'] = elevation;
 
-        if (biomesGrouped[biome] === undefined) biomesGrouped[biome] = [];
-        biomesGrouped[biome].push(feature);
+        if (biomesGrouped[cssclass] === undefined) biomesGrouped[cssclass] = [];
+        biomesGrouped[cssclass].push(feature);
 
-        progress.check(`idxV:${idx} biome:${biome}`);
-      }
+        progress.check(`idx:${idx} biome:${biome}`);
+      });
+      progress.stop();
 
+      this.processNeighbours(cells, biomesGrouped);
+
+      progress.start(Object.keys(biomesGrouped).length, 'pos processing');
       console.log(`biomesGrouped`, biomesGrouped, count);
-      const biomesMerged: { [id: string]: GeoJsonFeature; } = {};
+      // const biomesMerged: { [id: string]: GeoJsonFeature; } = {};
 
-      Object.keys(biomesGrouped).forEach((biome) => {
-        biomesMerged[biome] = biomesGrouped[biome][0];
-        for (let i = 1; i < biomesGrouped[biome].length; i++) {
-          biomesMerged[biome] = GeoJsonFeature.MergePolygon(biomesMerged[biome], biomesGrouped[biome][i], { 'biome': biome });
-        }
-      })
+      // Object.keys(biomesGrouped).forEach((biome) => {
+      //   biomesMerged[biome] = biomesGrouped[biome][0];
+      //   for (let i = 1; i < biomesGrouped[biome].length; i++) {
+      //     biomesMerged[biome] = GeoJsonFeature.MergePolygon(biomesMerged[biome], biomesGrouped[biome][i], { 'biome': biome });
+      //   }
+      // })
 
-      console.log(`biomesMerged`, biomesMerged);
+      // console.log(`biomesMerged`, biomesMerged);
 
-      const geojson = new GeoJson(Object.values(biomesMerged));
+      // const geojson = new GeoJson(Object.values(biomesMerged));
 
-      console.log(`geojson`, geojson)
+      // console.log(`geojson`, geojson)
 
       resolve(cells);
       progress.stop();
     });
+  }
+
+  public processNeighbours(cells: GeoJson, biomesGrouped: { [id: string]: GeoJsonFeature[]; }, num_process = 5, alias = 'neighbour', ini_exclude = ['border']) {
+    const exclude = ini_exclude;
+    for (let c = 1; c <= num_process; c++) {
+      biomesGrouped[`${alias}${c}`] = this.processNeighbour(alias, c, cells.features, <GeoJsonFeature[]>biomesGrouped[exclude[exclude.length - 1]], exclude, num_process, 1 / num_process);
+      exclude.push(`${alias}${c}`);
+    }
+  }
+
+  private processNeighbour(alias: string, alias_idx: number, cells: GeoJsonFeature[], border_cells: GeoJsonFeature[], exclude_alias: string[], total: number, percente: number): GeoJsonFeature[] {
+    let progress = new Progress(`processNeighbour ${alias} ${alias_idx}`, border_cells.length);
+    const ret: GeoJsonFeature[] = [];
+      progress.start();
+      border_cells.forEach((feature) => {
+        const idx = <number>feature.properties['idx'];
+        const plateIdx = <number>feature.properties['plate'];
+        const neighboursIdxs = <number[]>feature.properties['neighbours'];
+        neighboursIdxs.forEach((neighbourIdx) => {
+          const neighbour = cells[neighbourIdx];
+          const neighbour_plateIdx = <number>neighbour.properties['plate'];
+          if (idx !== <number>neighbour.properties['idx']) {
+            if (!(exclude_alias.includes(<string>neighbour.properties['cssclass']))) {
+              if (plateIdx === neighbour_plateIdx) {
+                const ref_elevation = <number>feature.properties['elevation'];
+                neighbour.properties['elevation'] = ((<number>neighbour.properties['elevation']) * (alias_idx*percente)) + (ref_elevation * ((total - alias_idx)*percente));
+                neighbour.properties['biome'] = WorldBiome[this.getBiome(<number>neighbour.properties['elevation'])];
+                neighbour.properties[alias] = alias_idx;
+                neighbour.properties['cssclass'] = alias + alias_idx;
+                ret.push(neighbour);
+              }
+            }
+          }
+        });
+        progress.check(`idx:${idx} `);
+      });
+      progress.stop();
+      return ret;
   }
 
   public getPoints(siteSize: number = 18): number[][] {

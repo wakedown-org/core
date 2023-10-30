@@ -256,16 +256,19 @@ ${ asyncAppend(handleLayers(data.layers), (layer: any) => svg`<path id="${layer.
           case 'mountain': return 'rgba(139, 137, 137, 255)';
           case 'snow': return 'rgba(255, 250, 250, 255)';
           case 'border': return 'rgba(5, 5, 5, 255)';
+          case 'neighbour1': return 'red';
+          case 'neighbour2': return 'pink';
+          case 'neighbour3': return 'orange';
+          case 'neighbour4': return 'green';
+          case 'neighbour5': return 'yellow';
           default: return d3.schemeCategory10[i % 10];
         }
       });
-
-    svg.append('path')
-      .attr('class', 'sites')
-      .datum(showSite ?
-        new GeoJsonMultiPoint(layers.features.map(f => f.properties['sitecoordinates']).map((d) => [+d[0], +d[1]])) :
-        new GeoJsonMultiPoint([center]))
-      .attr('d', path);
+    if (showSite)
+      svg.append('path')
+        .attr('class', 'sites')
+        .datum(new GeoJsonMultiPoint(layers.features.map(f => f.properties['sitecoordinates']).map((d) => [+d[0], +d[1]])))
+        .attr('d', path);
 
     d3.interval((elapsed: number) => {
       if (!this._rotationPaused) {
