@@ -255,12 +255,6 @@ ${ asyncAppend(handleLayers(data.layers), (layer: any) => svg`<path id="${layer.
           case 'beach': return 'rgba(238, 214, 175, 255)';
           case 'mountain': return 'rgba(139, 137, 137, 255)';
           case 'snow': return 'rgba(255, 250, 250, 255)';
-          case 'border': return 'rgba(5, 5, 5, 255)';
-          case 'neighbour1': return 'red';
-          case 'neighbour2': return 'pink';
-          case 'neighbour3': return 'orange';
-          case 'neighbour4': return 'green';
-          case 'neighbour5': return 'yellow';
           default: return d3.schemeCategory10[i % 10];
         }
       });

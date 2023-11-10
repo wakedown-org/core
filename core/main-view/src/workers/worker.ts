@@ -9,7 +9,7 @@ self.onmessage = async (eventData: any) => {
     seed = eventData.data.seed ?? 8;
 
   if (layers === undefined)
-    layers = await new WorldBuilder(seed).getLayers(110000);
+    layers = await new WorldBuilder(seed).getLayers(110000, 10, 42, 1/2, 5);
 
   const msg = {
     layers: layers
