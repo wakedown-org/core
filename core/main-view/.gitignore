@@ -3,6 +3,7 @@
 /test/
 /workers/
 /models/
+/tools/
 custom-elements.json
 # top level source
 main-view.js

@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "clean": "rimraf main-view.{d.ts,d.ts.map,js,js.map} test/main-view.{d.ts,d.ts.map,js,js.map} test/main-view_test.{d.ts,d.ts.map,js,js.map} workers models",
+    "clean": "rimraf main-view.{d.ts,d.ts.map,js,js.map} test/main-view.{d.ts,d.ts.map,js,js.map} test/main-view_test.{d.ts,d.ts.map,js,js.map} workers models tools",
     "lint": "npm run lint:lit-analyzer && npm run lint:eslint",
     "lint:eslint": "eslint 'src/**/*.ts'",
     "lint:lit-analyzer": "lit-analyzer",
